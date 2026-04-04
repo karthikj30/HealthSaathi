@@ -700,7 +700,9 @@ app.get("/", (_req, res) => {
   res.sendFile(path.join(__dirname, "landing.html"));
 });
 
-if (process.env.NODE_ENV !== 'production') {
+// Listen on all environments (Render sets NODE_ENV=production but still needs a running server)
+// Only skip if explicitly running in a serverless context (e.g. Vercel)
+if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`HealthSaathi server running at http://localhost:${PORT}`);
   });
