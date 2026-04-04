@@ -4,6 +4,10 @@ if (!window.HealthSaathiAuth?.isAuthenticated()) {
   window.location.href = "login.html";
 }
 
+if (window.HealthSaathiAuth?.getCurrentRole?.() === "doctor") {
+  window.location.href = "doctor.html";
+}
+
 const userNameEl = document.getElementById("userName");
 const profileBtn = document.getElementById("profileBtn");
 const quickQABtn = document.getElementById("quickQABtn");
@@ -11,6 +15,7 @@ const profileDropdown = document.getElementById("profileDropdown");
 const editProfileBtn = document.getElementById("editProfileBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const startQABtn = document.getElementById("startQABtn");
+const startQuickQABtn = document.getElementById("startQuickQABtn");
 const qaContainer = document.getElementById("qaContainer");
 const flashcardContainer = document.getElementById("flashcardContainer");
 const prevBtn = document.getElementById("prevBtn");
@@ -36,6 +41,8 @@ const voiceStatusBar = document.getElementById("voiceStatusBar");
 const voiceStatusText = document.getElementById("voiceStatusText");
 
 const OFFLINE_QUEUE_KEY = "healthsaathi_offline_queue";
+const REPORT_CACHE_KEY = "healthsaathi_reports_cache";
+const FAMILY_CACHE_KEY = "healthsaathi_family_cache";
 const TOAST_HOST_ID = "toastHost";
 const DEFAULT_PAIN_MAP_IMAGE = "1000_F_857099409_gBv7P7V89SDGy10YTmiPfPochMCXJqFL.jpg";
 
@@ -50,6 +57,12 @@ let activeCameraStream = null;
 let offlineSaveToastShown = false;
 let isVoiceControlActive = false;
 let globalVoiceRecognition = null;
+let voiceCaptureStream = null;
+let voiceRecorder = null;
+let voiceRecordingChunks = [];
+let voiceRecordingTimer = null;
+let voiceTranscribing = false;
+let currentQAMode = "full";
 
 const glossaryMap = {
   abdominal: "stomach area",
@@ -430,6 +443,20 @@ function stopActiveCameraStream() {
   activeCameraStream = null;
 }
 
+function stopActiveVoiceCapture() {
+  if (voiceRecordingTimer) {
+    clearTimeout(voiceRecordingTimer);
+    voiceRecordingTimer = null;
+  }
+  if (voiceRecorder && voiceRecorder.state === "recording") {
+    voiceRecorder.stop();
+  }
+  if (voiceCaptureStream) {
+    voiceCaptureStream.getTracks().forEach((track) => track.stop());
+    voiceCaptureStream = null;
+  }
+}
+
 async function requestMicrophonePermission() {
   if (!navigator.mediaDevices?.getUserMedia) {
     return false;
@@ -440,6 +467,225 @@ async function requestMicrophonePermission() {
     return true;
   } catch (_error) {
     return false;
+  }
+}
+
+function getVoiceRecordingMimeType() {
+  if (!window.MediaRecorder?.isTypeSupported) {
+    return "";
+  }
+
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+  return candidates.find((candidate) => window.MediaRecorder.isTypeSupported(candidate)) || "";
+}
+
+function readBlobAsDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read audio"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function transcribeVoiceBlob(blob) {
+  const dataUrl = await readBlobAsDataUrl(blob);
+  const response = await fetch("/api/voice/transcribe", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      audioBase64: dataUrl,
+      mimeType: blob.type || "audio/webm",
+    }),
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(result.error || "Unable to transcribe audio");
+  }
+
+  return String(result.text || "").trim();
+}
+
+function applyVoiceTranscriptToQuestion(question, spoken) {
+  const input = document.getElementById("flashcardInput");
+  const qType = question.type;
+
+  if (!spoken) {
+    return false;
+  }
+
+  if (qType === "text" || qType === "textarea") {
+    if (input) {
+      input.value = `${input.value ? `${input.value} ` : ""}${spoken}`.trim();
+      return true;
+    }
+    return false;
+  }
+
+  if (qType === "number") {
+    const num = parseFloat(spoken.replace(/[^0-9.]/g, ""));
+    if (!Number.isNaN(num) && input) {
+      input.value = num;
+      return true;
+    }
+    return false;
+  }
+
+  if (qType === "select") {
+    const opts = Array.from(input?.options || []);
+    const spokenNorm = spoken.toLowerCase();
+    const match = opts.find((option) =>
+      option.value && (
+        option.value.toLowerCase().includes(spokenNorm) ||
+        spokenNorm.includes(option.value.toLowerCase()) ||
+        option.text.toLowerCase().includes(spokenNorm)
+      )
+    );
+    if (match && input) {
+      input.value = match.value;
+      return true;
+    }
+    return false;
+  }
+
+  if (qType === "multi_select") {
+    const checkboxes = document.querySelectorAll(".multi-select input[type=checkbox]");
+    const spokenNorm = spoken.toLowerCase();
+    let matched = false;
+    checkboxes.forEach((checkbox) => {
+      if (checkbox.value.toLowerCase().includes(spokenNorm) || spokenNorm.includes(checkbox.value.toLowerCase())) {
+        checkbox.checked = true;
+        matched = true;
+      }
+    });
+    return matched;
+  }
+
+  if (qType === "slider") {
+    const num = parseFloat(spoken.replace(/[^0-9.]/g, ""));
+    if (!Number.isNaN(num) && input) {
+      input.value = Math.min(Math.max(num, Number(input.min || 0)), Number(input.max || 10));
+      document.getElementById("sliderValue").textContent = input.value;
+      return true;
+    }
+    return false;
+  }
+
+  return false;
+}
+
+async function startVoiceInput() {
+  const input = document.getElementById("flashcardInput");
+  const btn = document.getElementById("voiceBtn");
+  const question = flashcardQuestions[flashcardIndex];
+
+  if (!input || !question || voiceTranscribing) {
+    return;
+  }
+
+  if (voiceRecorder?.state === "recording") {
+    stopActiveVoiceCapture();
+    return;
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    showToast("Voice input is not supported in this browser.", "error");
+    return;
+  }
+
+  const allowed = await requestMicrophonePermission();
+  if (!allowed) {
+    showToast("Microphone permission blocked. Allow mic access and try again.", "error");
+    return;
+  }
+
+  try {
+    voiceCaptureStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    voiceRecordingChunks = [];
+    const mimeType = getVoiceRecordingMimeType();
+    voiceRecorder = mimeType ? new MediaRecorder(voiceCaptureStream, { mimeType }) : new MediaRecorder(voiceCaptureStream);
+
+    if (btn) {
+      btn.textContent = "Recording...";
+      btn.disabled = false;
+    }
+
+    voiceRecorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        voiceRecordingChunks.push(event.data);
+      }
+    };
+
+    voiceRecorder.onstop = async () => {
+      if (voiceRecordingTimer) {
+        clearTimeout(voiceRecordingTimer);
+        voiceRecordingTimer = null;
+      }
+
+      const recordingBlob = voiceRecordingChunks.length
+        ? new Blob(voiceRecordingChunks, { type: voiceRecorder?.mimeType || "audio/webm" })
+        : null;
+
+      voiceRecordingChunks = [];
+      stopActiveVoiceCapture();
+
+      if (!recordingBlob || recordingBlob.size === 0) {
+        if (btn) {
+          btn.textContent = tUi("voiceInput");
+          btn.disabled = false;
+        }
+        showToast("No audio captured. Try again.", "error");
+        return;
+      }
+
+      voiceTranscribing = true;
+      if (btn) {
+        btn.textContent = "Transcribing...";
+      }
+
+      try {
+        const spoken = await transcribeVoiceBlob(recordingBlob);
+        if (!spoken) {
+          showToast("No speech detected. Try again.", "error");
+          return;
+        }
+
+        const applied = applyVoiceTranscriptToQuestion(question, spoken);
+        if (!applied) {
+          showToast("Transcript received, but nothing matched the current field.", "error");
+          return;
+        }
+
+        showToast(`Heard: ${spoken}`);
+        setTimeout(() => {
+          nextBtn?.click();
+        }, 1200);
+      } catch (error) {
+        showToast(error.message || "Unable to transcribe audio.", "error");
+      } finally {
+        voiceTranscribing = false;
+        if (btn) {
+          btn.textContent = tUi("voiceInput");
+          btn.disabled = false;
+        }
+      }
+    };
+
+    voiceRecorder.start();
+    showToast("Recording voice input... Click again to stop.");
+    voiceRecordingTimer = setTimeout(() => {
+      if (voiceRecorder?.state === "recording") {
+        voiceRecorder.stop();
+      }
+    }, 9000);
+  } catch (error) {
+    stopActiveVoiceCapture();
+    if (btn) {
+      btn.textContent = tUi("voiceInput");
+      btn.disabled = false;
+    }
+    showToast(error.message || "Unable to start voice input.", "error");
   }
 }
 
@@ -738,6 +984,296 @@ function safeParse(value, fallback) {
   }
 }
 
+function getReportCacheStorageKey() {
+  const user = window.HealthSaathiAuth?.isAuthenticated?.() ? window.HealthSaathiAuth.getCurrentUser().toLowerCase() : "guest";
+  return `${REPORT_CACHE_KEY}:${user}`;
+}
+
+function loadCachedReports() {
+  return safeParse(localStorage.getItem(getReportCacheStorageKey()), []);
+}
+
+function persistReportCache(reports) {
+  localStorage.setItem(getReportCacheStorageKey(), JSON.stringify(reports));
+}
+
+function getFamilyCacheStorageKey() {
+  const user = window.HealthSaathiAuth?.isAuthenticated?.() ? window.HealthSaathiAuth.getCurrentUser().toLowerCase() : "guest";
+  return `${FAMILY_CACHE_KEY}:${user}`;
+}
+
+function loadPendingFamilyMembers() {
+  return safeParse(localStorage.getItem(getFamilyCacheStorageKey()), []);
+}
+
+function persistPendingFamilyMembers(members) {
+  localStorage.setItem(getFamilyCacheStorageKey(), JSON.stringify(members));
+}
+
+function queuePendingFamilyMember(member) {
+  const current = loadPendingFamilyMembers();
+  current.unshift({ ...member, localId: `pending-${Date.now()}-${Math.random().toString(16).slice(2)}`, syncState: "pending" });
+  persistPendingFamilyMembers(current);
+}
+
+function clearPendingFamilyMembers() {
+  localStorage.removeItem(getFamilyCacheStorageKey());
+}
+
+function reportCacheKey(report) {
+  return String(report?.sessionId || report?.id || `${report?.title || ""}|${report?.createdAt || ""}`);
+}
+
+function reportTimeValue(report) {
+  const value = new Date(report?.createdAt || 0).getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
+function mergeReports(...collections) {
+  const merged = new Map();
+
+  collections.flat().filter(Boolean).forEach((report) => {
+    const key = reportCacheKey(report);
+    const existing = merged.get(key);
+    if (!existing || reportTimeValue(report) >= reportTimeValue(existing)) {
+      merged.set(key, report);
+    }
+  });
+
+  return Array.from(merged.values()).sort((left, right) => reportTimeValue(right) - reportTimeValue(left));
+}
+
+function rememberReport(report) {
+  reportHistory = mergeReports([report], reportHistory);
+  persistReportCache(reportHistory);
+  renderDashboardPrimaryAction();
+  renderDashboardRecommendation();
+}
+
+const DOCUMENT_GLOSSARY = {
+  abdominal: "stomach area",
+  anemia: "low blood count",
+  bilirubin: "liver waste marker",
+  cholesterol: "blood fat",
+  creatinine: "kidney function marker",
+  edema: "swelling",
+  elevated: "higher than usual",
+  fever: "high body temperature",
+  hemoglobin: "blood oxygen protein",
+  hypertension: "high blood pressure",
+  inflammation: "swelling or irritation",
+  infection: "germ-related illness",
+  lesion: "abnormal spot",
+  pathology: "lab diagnosis",
+  platelet: "blood-clotting cell",
+  radiology: "scan imaging",
+  triglycerides: "blood fat",
+  urinalysis: "urine test",
+};
+
+function simplifyDocumentLanguage(text) {
+  let simplified = String(text || "");
+
+  Object.entries(DOCUMENT_GLOSSARY).forEach(([medical, plain]) => {
+    const regex = new RegExp(`\\b${medical}\\b`, "gi");
+    simplified = simplified.replace(regex, plain);
+  });
+
+  return simplifyLanguage(simplified);
+}
+
+function splitDocumentSentences(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .match(/[^.!?]+[.!?]?/g) || [];
+}
+
+function buildDocumentPrecautions(text) {
+  const lower = String(text || "").toLowerCase();
+  const precautions = [];
+  const add = (item) => {
+    if (!precautions.includes(item)) {
+      precautions.push(item);
+    }
+  };
+
+  if (/(shortness of breath|chest pain|faint|stroke|seizure)/.test(lower)) {
+    add("This looks urgent. Seek immediate medical care if symptoms are severe or worsening.");
+  }
+  if (/(fever|infection|culture|antibiotic|pus)/.test(lower)) {
+    add("Watch for persistent fever, spreading redness, or worsening infection signs and follow the full medicine course.");
+  }
+  if (/(glucose|blood sugar|diabetes|hba1c|sugar)/.test(lower)) {
+    add("Keep blood sugar under control with the diet and medicines recommended by your clinician.");
+  }
+  if (/(blood pressure|hypertension|bp\b)/.test(lower)) {
+    add("Check blood pressure regularly and avoid extra salt unless your doctor advises otherwise.");
+  }
+  if (/(hemoglobin|anemia|iron)/.test(lower)) {
+    add("Discuss low blood count follow-up and iron-rich food only if your doctor recommends it.");
+  }
+  if (/(cholesterol|triglyceride|lipid)/.test(lower)) {
+    add("Stay consistent with diet, movement, and follow-up for lipid results.");
+  }
+  if (/(creatinine|urea|kidney|renal)/.test(lower)) {
+    add("Review kidney-function results with your doctor and follow fluid advice carefully.");
+  }
+  if (/(liver|sgot|sgpt|alt|ast|bilirubin)/.test(lower)) {
+    add("Avoid alcohol and confirm liver-related medicines with a clinician.");
+  }
+  if (/(platelet|thrombocyte|bleeding|bruising)/.test(lower)) {
+    add("Get prompt medical review if there is unusual bleeding, bruising, or a low platelet report.");
+  }
+  if (/(fracture|dislocation|ligament|tear|sprain)/.test(lower)) {
+    add("Rest the affected area and follow imaging or orthopedic review instructions.");
+  }
+
+  add("Bring this report to your next appointment and follow only the advice of a qualified clinician.");
+  return precautions;
+}
+
+function buildDocumentAnalysis(text, fileName) {
+  const cleanedText = String(text || "").replace(/\s+/g, " ").trim();
+  const sentenceSample = splitDocumentSentences(cleanedText).slice(0, 3).join(" ");
+  const simplified = simplifyDocumentLanguage(sentenceSample || cleanedText.slice(0, 400));
+  const precautions = buildDocumentPrecautions(cleanedText);
+  const keyFindings = [];
+
+  if (/high blood pressure|hypertension|bp\b/i.test(cleanedText)) {
+    keyFindings.push("Blood pressure related finding mentioned.");
+  }
+  if (/glucose|blood sugar|diabetes|hba1c|sugar/i.test(cleanedText)) {
+    keyFindings.push("Blood sugar related finding mentioned.");
+  }
+  if (/hemoglobin|anemia|hb\b/i.test(cleanedText)) {
+    keyFindings.push("Low blood count / hemoglobin related finding mentioned.");
+  }
+  if (/infection|fever|culture|antibiotic|pus/i.test(cleanedText)) {
+    keyFindings.push("Infection related term detected.");
+  }
+  if (/creatinine|urea|kidney|renal/i.test(cleanedText)) {
+    keyFindings.push("Kidney-function related term detected.");
+  }
+
+  return {
+    summary: simplified || `No readable text was extracted from ${fileName || "this document"}.`,
+    precautions: precautions.join(" "),
+    keyFindings,
+  };
+}
+
+function loadExternalScript(src) {
+  if (!window.__healthSaathiScriptLoads) {
+    window.__healthSaathiScriptLoads = new Map();
+  }
+
+  if (window.__healthSaathiScriptLoads.has(src)) {
+    return window.__healthSaathiScriptLoads.get(src);
+  }
+
+  const promise = new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[data-healthsaathi-src="${src}"]`);
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)));
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.dataset.healthsaathiSrc = src;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
+  });
+
+  window.__healthSaathiScriptLoads.set(src, promise);
+  return promise;
+}
+
+async function extractDocumentText(file) {
+  const fileName = String(file?.name || "").toLowerCase();
+  const fileType = String(file?.type || "").toLowerCase();
+  const fileData = await file.arrayBuffer();
+
+  if (fileType.startsWith("text/") || /\.(txt|md|csv|log)$/i.test(fileName)) {
+    return new TextDecoder().decode(fileData);
+  }
+
+  if (fileType === "application/pdf" || fileName.endsWith(".pdf")) {
+    await loadExternalScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(fileData) }).promise;
+      const pages = [];
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        const page = await pdf.getPage(pageNumber);
+        const content = await page.getTextContent();
+        pages.push(content.items.map((item) => item.str).join(" "));
+      }
+      return pages.join("\n");
+    }
+  }
+
+  if (fileType.startsWith("image/")) {
+    await loadExternalScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js");
+    if (window.Tesseract) {
+      const objectUrl = URL.createObjectURL(file);
+      try {
+        const result = await window.Tesseract.recognize(objectUrl, "eng");
+        return String(result?.data?.text || "");
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    }
+  }
+
+  if (fileType.includes("officedocument.wordprocessingml.document") || fileName.endsWith(".docx")) {
+    await loadExternalScript("https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js");
+    if (window.mammoth) {
+      const result = await window.mammoth.extractRawText({ arrayBuffer: fileData });
+      return String(result?.value || "");
+    }
+  }
+
+  return typeof file.text === "function" ? file.text() : "";
+}
+
+async function analyzeDocumentFile(file) {
+  const extractedText = await extractDocumentText(file).catch(() => "");
+  const analysis = buildDocumentAnalysis(extractedText, file?.name || "document");
+  return {
+    ...analysis,
+    extractedText: String(extractedText || "").replace(/\s+/g, " ").trim().slice(0, 12000),
+  };
+}
+
+async function analyzeDocumentViaApi({ fileData, fileName, fileMime }) {
+  const response = await fetch("/api/documents/analyze", {
+    method: "POST",
+    headers: {
+      ...getAuthHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ fileData, fileName, fileMime }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || "Document OCR analysis failed");
+  }
+
+  const payload = await response.json();
+  return {
+    summary: String(payload.summary || ""),
+    precautions: String(payload.precautions || ""),
+    extractedText: String(payload.extractedText || ""),
+    keyFindings: [],
+  };
+}
+
 function ensureToastHost() {
   let host = document.getElementById(TOAST_HOST_ID);
   if (host) {
@@ -934,6 +1470,7 @@ async function syncOfflineQueue() {
   if (!remaining.length) {
     offlineSaveToastShown = false;
     showToast("Offline data synced successfully.");
+    clearPendingFamilyMembers();
     await Promise.all([loadFamilyMembers(), loadReports()]);
     renderDashboardRecommendation();
   }
@@ -996,24 +1533,34 @@ editProfileBtn.addEventListener("click", () => {
 });
 
 quickQABtn?.addEventListener("click", () => {
-  startQABtn?.click();
+  startQuickQABtn?.click();
 });
 
 logoutBtn.addEventListener("click", () => {
   window.HealthSaathiAuth.logout();
 });
 
-startQABtn.addEventListener("click", async () => {
+async function startQASession(mode = "full") {
+  currentQAMode = mode === "quick" ? "quick" : "full";
   currentSessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   await loadPreviousAnswers(currentSessionId);
   flashcardAnswers = hydrateAnswersFromProfile(flashcardAnswers);
-  flashcardQuestions = buildQuestionSet(flashcardAnswers);
+  flashcardQuestions = getActiveQuestionSet(flashcardAnswers);
   flashcardIndex = 0;
   qaContainer.style.display = "block";
   startQABtn.style.display = "none";
   document.querySelector(".qa-controls").style.display = "flex";
   renderCurrentFlashcard();
   updateProgress();
+  showToast(currentQAMode === "quick" ? "Quick analysis started (4 smart steps)." : "Full Q&A started.");
+}
+
+startQABtn.addEventListener("click", async () => {
+  await startQASession("full");
+});
+
+startQuickQABtn?.addEventListener("click", async () => {
+  await startQASession("quick");
 });
 
 prevBtn.addEventListener("click", () => {
@@ -1028,7 +1575,7 @@ prevBtn.addEventListener("click", () => {
 
 nextBtn.addEventListener("click", () => {
   saveCurrentAnswer();
-  const rebuilt = buildQuestionSet(flashcardAnswers);
+  const rebuilt = getActiveQuestionSet(flashcardAnswers);
   const activeQuestionId = flashcardQuestions[flashcardIndex]?.id;
   flashcardQuestions = rebuilt;
 
@@ -1066,6 +1613,14 @@ function renderDashboardPrimaryAction() {
   const heroAction = document.querySelector(".welcome-section");
   const shouldUseHeaderAction = hasTodayReport();
 
+  if (typeof reportHistory !== "undefined") {
+    const reportCount = reportHistory.length;
+    const statReports = document.getElementById("statReports");
+    if (statReports) {
+      statReports.textContent = `${reportCount} Report${reportCount === 1 ? "" : "s"}`;
+    }
+  }
+
   if (startQABtn) {
     startQABtn.style.display = shouldUseHeaderAction ? "none" : "inline-flex";
   }
@@ -1086,6 +1641,207 @@ function insertQuestionsAfter(questions, afterId, additions) {
     return;
   }
   questions.splice(index + 1, 0, ...additions);
+}
+
+function detectQuickSymptomCluster(text) {
+  const raw = String(text || "").toLowerCase();
+  if (/(head|migraine|temple|forehead)/.test(raw)) {
+    return "headache";
+  }
+  if (/(stomach|abdomen|acidity|gas|nausea|vomit|loose motion)/.test(raw)) {
+    return "digestive";
+  }
+  if (/(cough|cold|throat|breath|chest|wheez|fever)/.test(raw)) {
+    return "respiratory";
+  }
+  if (/(back|joint|knee|shoulder|neck|muscle|sprain)/.test(raw)) {
+    return "musculoskeletal";
+  }
+  return "general";
+}
+
+function getQuickFollowupForStory(storyText) {
+  const cluster = detectQuickSymptomCluster(storyText);
+  const baseline = [
+    "Getting worse",
+    "Stable",
+    "Improving",
+    "Mild pain",
+    "Moderate pain",
+    "Severe pain",
+  ];
+
+  if (cluster === "headache") {
+    return {
+      question: "Headache follow-up: what matches your situation right now?",
+      options: [...baseline, "Light sensitivity", "Noise sensitivity", "Nausea", "Screen-time trigger"],
+    };
+  }
+
+  if (cluster === "digestive") {
+    return {
+      question: "Digestive follow-up: what matches your current pattern?",
+      options: [...baseline, "After meals", "Acidity/burning", "Bloating", "Nausea/vomiting"],
+    };
+  }
+
+  if (cluster === "respiratory") {
+    return {
+      question: "Respiratory follow-up: what symptoms are present now?",
+      options: [...baseline, "Breathing discomfort", "Chest tightness", "Persistent cough", "Fever episodes"],
+    };
+  }
+
+  if (cluster === "musculoskeletal") {
+    return {
+      question: "Body pain follow-up: what fits best right now?",
+      options: [...baseline, "Movement makes it worse", "Morning stiffness", "Swelling", "Relief with rest"],
+    };
+  }
+
+  return {
+    question: "Quick follow-up: which of these describe your current condition?",
+    options: [...baseline, "Affects daily activity", "Happens in episodes", "Linked to stress", "No clear trigger"],
+  };
+}
+
+function buildQuickQuestionSet(answers = {}) {
+  const story = String(answers.quick_voice_story || answers.symptoms || "");
+  const followup = getQuickFollowupForStory(story);
+  const gender = String(answers.gender || "").trim();
+  const quickQuestions = [
+    ...(gender
+      ? []
+      : [
+          {
+            id: "gender",
+            question: "Select sex for symptom logic",
+            type: "select",
+            options: ["Male", "Female", "Other", "Prefer not to say"],
+            required: true,
+          },
+        ]),
+    {
+      id: "quick_voice_story",
+      question: "Doctor-style voice note: tell what the problem is, where it is, since when it started, and whether it is worsening.",
+      type: "textarea",
+      required: true,
+      placeholder: "Example: I have right-side headache since yesterday evening and it is worse at night",
+    },
+    {
+      id: "quick_lifestyle_voice",
+      question: "In one voice note: what did you eat, physical activity, sleep quality/hours, and stress level today?",
+      type: "textarea",
+      required: true,
+      placeholder: "Example: Ate spicy lunch, no exercise, slept 5 hours, stress is high",
+    },
+    {
+      id: "pain_location",
+      question: "Tap where it pains and mark points on the body image",
+      type: "pain_map",
+    },
+    {
+      id: "quick_followup",
+      question: followup.question,
+      type: "multi_select",
+      options: followup.options,
+      required: true,
+    },
+  ];
+
+  if (String(answers.gender || "") === "Female") {
+    insertQuestionsAfter(quickQuestions, "quick_symptom_start", [
+      {
+        id: "last_period_date",
+        question: "Last menstrual cycle start date",
+        type: "date",
+      },
+    ]);
+  }
+
+  return quickQuestions;
+}
+
+function getActiveQuestionSet(answers = {}) {
+  return currentQAMode === "quick" ? buildQuickQuestionSet(answers) : buildQuestionSet(answers);
+}
+
+function normalizeAnswersForReport(answers) {
+  if (currentQAMode !== "quick") {
+    return answers;
+  }
+
+  const normalized = { ...answers };
+  const quickStory = String(answers.quick_voice_story || "").trim();
+  const selectedFollowups = Array.isArray(answers.quick_followup)
+    ? answers.quick_followup
+    : safeParse(answers.quick_followup || "[]", []);
+
+  normalized.symptoms = quickStory || normalized.symptoms || "Not provided";
+  normalized.symptom_start = answers.quick_symptom_start || normalized.symptom_start || "";
+
+  const lifestyleNarrative = String(answers.quick_lifestyle_voice || "").trim();
+  if (lifestyleNarrative) {
+    const lower = lifestyleNarrative.toLowerCase();
+    normalized.food_recent = lifestyleNarrative;
+
+    if (/(walk|gym|exercise|run|yoga|cycling|workout)/.test(lower)) {
+      normalized.physical_activity = "Reported activity present";
+    } else if (/(no exercise|sedentary|rest all day|inactive)/.test(lower)) {
+      normalized.physical_activity = "Low or no activity";
+    } else {
+      normalized.physical_activity = normalized.physical_activity || "Not clearly reported";
+    }
+
+    if (/(poor sleep|insomnia|sleep.*(4|5)\s*hour|slept\s*(4|5)\s*hour)/.test(lower)) {
+      normalized.sleep_pattern = "Poor";
+    } else if (/(slept\s*(6|7|8)\s*hour|good sleep|slept well)/.test(lower)) {
+      normalized.sleep_pattern = "Good";
+    } else {
+      normalized.sleep_pattern = normalized.sleep_pattern || "Average";
+    }
+
+    if (/(very high stress|high stress|stressed|anxious)/.test(lower)) {
+      normalized.stress_level = "High";
+    } else if (/(low stress|calm|relaxed)/.test(lower)) {
+      normalized.stress_level = "Low";
+    } else {
+      normalized.stress_level = normalized.stress_level || "Moderate";
+    }
+  }
+
+  const followText = selectedFollowups.join(" ").toLowerCase();
+  if (followText.includes("worse")) {
+    normalized.symptom_change = "Getting worse";
+  } else if (followText.includes("improving")) {
+    normalized.symptom_change = "Improving";
+  } else {
+    normalized.symptom_change = "Stable";
+  }
+
+  if (followText.includes("severe")) {
+    normalized.pain_intensity = "8";
+  } else if (followText.includes("moderate")) {
+    normalized.pain_intensity = "5";
+  } else if (followText.includes("mild")) {
+    normalized.pain_intensity = "3";
+  } else {
+    normalized.pain_intensity = normalized.pain_intensity || "4";
+  }
+
+  normalized.pain_type = selectedFollowups.filter((item) => !/(getting worse|stable|improving|mild pain|moderate pain|severe pain)/i.test(item));
+  const startDate = String(normalized.symptom_start || "").split("T")[0] || "";
+  normalized.timeline_entries = [
+    {
+      date: startDate,
+      whenStarted: normalized.symptom_start || "",
+      startIntensity: normalized.pain_intensity,
+      trend: normalized.symptom_change.includes("worse") ? "Worse" : normalized.symptom_change.includes("Improving") ? "Better" : "Same",
+      note: quickStory,
+    },
+  ];
+
+  return normalized;
 }
 
 function buildQuestionSet(answers = {}) {
@@ -1514,6 +2270,7 @@ function renderCurrentFlashcard() {
     return;
   }
 
+  stopActiveVoiceCapture();
   stopActiveCameraStream();
 
   const answer = flashcardAnswers[question.id] || "";
@@ -1747,87 +2504,9 @@ function bindQuestionInteraction(question) {
     speakQuestion(localizeQuestion(question));
   });
 
-  // Voice auto-fill: mic listens, fills the answer, then auto-advances after 1.2s
+  // Voice auto-fill: record a short clip and transcribe it through AssemblyAI.
   document.getElementById("voiceBtn")?.addEventListener("click", () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      showToast(tUi("voiceControlNotSupported"), "error");
-      return;
-    }
-    const btn = document.getElementById("voiceBtn");
-    const rec = new SpeechRecognition();
-    rec.lang = getSpeechLang();
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-
-    if (btn) { btn.textContent = tUi("listening"); btn.disabled = true; }
-
-    rec.onresult = (event) => {
-      const spoken = event.results[0]?.[0]?.transcript || "";
-      if (!spoken) return;
-
-      const input = document.getElementById("flashcardInput");
-      const qType = question.type;
-
-      if (qType === "text" || qType === "textarea") {
-        if (input) input.value = spoken;
-      } else if (qType === "number") {
-        const num = parseFloat(spoken.replace(/[^0-9.]/g, ""));
-        if (!isNaN(num) && input) input.value = num;
-      } else if (qType === "select") {
-        // Find closest option by spoken word
-        const opts = Array.from(input?.options || []);
-        const spokenNorm = spoken.toLowerCase();
-        const match = opts.find(o =>
-          o.value && (o.value.toLowerCase().includes(spokenNorm) ||
-                       spokenNorm.includes(o.value.toLowerCase()) ||
-                       o.text.toLowerCase().includes(spokenNorm))
-        );
-        if (match && input) input.value = match.value;
-      } else if (qType === "multi_select") {
-        const checkboxes = document.querySelectorAll(".multi-select input[type=checkbox]");
-        const spokenNorm = spoken.toLowerCase();
-        checkboxes.forEach(cb => {
-          if (cb.value.toLowerCase().includes(spokenNorm) || spokenNorm.includes(cb.value.toLowerCase())) {
-            cb.checked = true;
-          }
-        });
-      } else if (qType === "slider") {
-        const num = parseFloat(spoken.replace(/[^0-9.]/g, ""));
-        if (!isNaN(num) && input) {
-          input.value = Math.min(Math.max(num, Number(input.min || 0)), Number(input.max || 10));
-          document.getElementById("sliderValue").textContent = input.value;
-        }
-      }
-
-      showToast(`✓ "${spoken}"`, "success");
-      if (btn) { btn.textContent = tUi("voiceInput"); btn.disabled = false; }
-
-      // Auto-advance after 1.2 seconds
-      setTimeout(() => { nextBtn?.click(); }, 1200);
-    };
-
-    rec.onerror = (evt) => {
-      const errCode = String(evt?.error || "").toLowerCase();
-      let micMsg;
-      if (errCode.includes("not-allowed") || errCode.includes("service-not-allowed")) {
-        micMsg = "Microphone blocked — please allow mic access in your browser settings.";
-      } else if (errCode.includes("no-speech")) {
-        micMsg = "No speech detected. Please speak clearly and try again.";
-      } else if (errCode.includes("network")) {
-        micMsg = "Network error with speech service. Check connection and try again.";
-      } else {
-        micMsg = "Could not capture voice. Please try again.";
-      }
-      showToast(micMsg, "error");
-      if (btn) { btn.textContent = tUi("voiceInput"); btn.disabled = false; }
-    };
-
-    rec.onend = () => {
-      if (btn && btn.disabled) { btn.textContent = tUi("voiceInput"); btn.disabled = false; }
-    };
-
-    rec.start();
+    startVoiceInput();
   });
 
   if (question.id === "language_pref") {
@@ -2130,7 +2809,6 @@ function bindQuestionInteraction(question) {
     });
   }
 
-  document.getElementById("voiceBtn")?.addEventListener("click", startVoiceInput);
 }
 
 function speakQuestion(text) {
@@ -2141,58 +2819,15 @@ function speakQuestion(text) {
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = getSpeechLang();
   utterance.rate = 0.95;
+  const voices = window.speechSynthesis.getVoices?.() || [];
+  const preferredVoice = voices.find((voice) => voice.lang === utterance.lang)
+    || voices.find((voice) => voice.lang?.toLowerCase().startsWith(utterance.lang.split("-")[0].toLowerCase()))
+    || voices[0];
+  if (preferredVoice) {
+    utterance.voice = preferredVoice;
+  }
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
-}
-
-function startVoiceInput() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const input = document.getElementById("flashcardInput");
-  if (!SpeechRecognition || !input) {
-    showToast("Voice input is not supported in this browser.", "error");
-    return;
-  }
-
-  requestMicrophonePermission().then((allowed) => {
-    if (!allowed) {
-      showToast("Microphone permission blocked. Allow mic access and try again.", "error");
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = getSpeechLang();
-    recognition.interimResults = false;
-
-    const btn = document.getElementById("voiceBtn");
-    if (btn) {
-      btn.textContent = tUi("listening");
-    }
-
-    recognition.onresult = (event) => {
-      const spoken = event.results?.[0]?.[0]?.transcript || "";
-      input.value = `${input.value ? `${input.value} ` : ""}${spoken}`;
-    };
-
-    recognition.onend = () => {
-      if (btn) {
-        btn.textContent = tUi("voiceInput");
-      }
-    };
-
-    recognition.onerror = (event) => {
-      const code = String(event?.error || "").toLowerCase();
-      if (code.includes("not-allowed") || code.includes("service-not-allowed")) {
-        showToast("Microphone permission blocked. Allow mic access and try again.", "error");
-      } else if (code.includes("no-speech")) {
-        showToast("No speech detected. Try again.", "error");
-      }
-      if (btn) {
-        btn.textContent = tUi("voiceInput");
-      }
-    };
-
-    recognition.start();
-  });
 }
 
 function saveCurrentAnswer() {
@@ -2447,25 +3082,29 @@ function renderResultsHub(answers, summaryHtml, doctorSummary, checklist, analys
 }
 
 function completeQASession() {
+  stopActiveVoiceCapture();
   stopActiveCameraStream();
-  const completeness = computeCompleteness(flashcardAnswers);
-  const urgency = detectUrgency(flashcardAnswers);
-  const patterns = detectPatterns(flashcardAnswers);
-  const menstrualInsight = getMenstrualInsight(flashcardAnswers);
+  const normalizedAnswers = normalizeAnswersForReport(flashcardAnswers);
+  const completeness = computeCompleteness(normalizedAnswers);
+  const urgency = detectUrgency(normalizedAnswers);
+  const patterns = detectPatterns(normalizedAnswers);
+  const menstrualInsight = getMenstrualInsight(normalizedAnswers);
 
-  const summaryHtml = generateSummaryHtml(flashcardAnswers, urgency, patterns, menstrualInsight, completeness);
-  const doctorSummary = generateDoctorSummary(flashcardAnswers, urgency, patterns);
-  const checklist = buildChecklist(flashcardAnswers, urgency, patterns);
+  const summaryHtml = generateSummaryHtml(normalizedAnswers, urgency, patterns, menstrualInsight, completeness);
+  const doctorSummary = generateDoctorSummary(normalizedAnswers, urgency, patterns);
+  const checklist = buildChecklist(normalizedAnswers, urgency, patterns);
 
   const analysis = { completeness, urgency, patterns };
-  renderResultsHub(flashcardAnswers, summaryHtml, doctorSummary, checklist, analysis);
+  renderResultsHub(normalizedAnswers, summaryHtml, doctorSummary, checklist, analysis);
   document.querySelector(".qa-controls").style.display = "none";
 
   saveReportToDatabase({
-    title: `Health Assessment - ${new Date().toLocaleDateString()}`,
+    title: `${currentQAMode === "quick" ? "Quick" : "Health"} Assessment - ${new Date().toLocaleDateString()}`,
     createdAt: new Date().toISOString(),
     sessionId: currentSessionId,
-    answers: flashcardAnswers,
+    qaMode: currentQAMode,
+    answers: normalizedAnswers,
+    rawAnswers: flashcardAnswers,
     analysis,
     doctorSummary,
   });
@@ -2508,6 +3147,7 @@ function generateDoctorSummary(answers, urgency, patterns) {
 }
 
 async function saveReportToDatabase(payload) {
+  rememberReport(payload);
   await postWithOfflineQueue("/api/reports", payload);
   await loadReports();
   renderDashboardRecommendation();
@@ -2580,12 +3220,12 @@ function renderFamilyMemberSummary() {
       <div class="family-summary-item">
         <div>
           <strong>${member.name}</strong>
-          <p class="family-meta">${member.relation || "Family"} • ${member.isAppUser ? "Registered user" : member.inviteSent ? "Invite sent" : "Not registered"}</p>
+          <p class="family-meta">${member.relation || "Family"} • ${member.syncState === "pending" ? "Pending sync" : member.isAppUser ? "Registered user" : member.inviteSent ? "Invite sent" : "Not registered"}</p>
         </div>
         <div class="family-actions-inline">
-          <button type="button" class="family-edit-btn" data-family-edit-id="${member.id}">Edit</button>
-          <button type="button" class="family-remove-btn" data-family-remove-id="${member.id}">Remove</button>
-          ${member.email && !member.isAppUser ? `<button type="button" class="family-invite-btn" data-family-invite-id="${member.id}">Invite</button>` : ""}
+          ${member.id ? `<button type="button" class="family-edit-btn" data-family-edit-id="${member.id}">Edit</button>` : ""}
+          ${member.id ? `<button type="button" class="family-remove-btn" data-family-remove-id="${member.id}">Remove</button>` : ""}
+          ${member.id && member.email && !member.isAppUser ? `<button type="button" class="family-invite-btn" data-family-invite-id="${member.id}">Invite</button>` : ""}
         </div>
       </div>
     `
@@ -2693,13 +3333,24 @@ familyDetailForm?.addEventListener("submit", async (event) => {
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        showToast("Unable to update family member.", "error");
+        const body = await response.json().catch(() => ({}));
+        showToast(body.error || "Unable to update family member.", "error");
         return;
       }
       showToast("Family member updated.");
     } else {
-      await postWithOfflineQueue("/api/family-members", payload);
-      showToast("Family member added.");
+      const response = await postWithOfflineQueue("/api/family-members", payload);
+      if (!response) {
+        queuePendingFamilyMember({ ...payload, createdAt: new Date().toISOString() });
+        showToast("Family member saved offline and will sync automatically.");
+      } else if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        showToast(body.error || "Unable to save family member.", "error");
+        return;
+      } else {
+        clearPendingFamilyMembers();
+        showToast("Family member added.");
+      }
     }
 
     await loadFamilyMembers();
@@ -2745,13 +3396,19 @@ async function loadFamilyMembers() {
   try {
     const response = await fetch("/api/family-members", { headers: getAuthHeaders() });
     if (!response.ok) {
-      familyMembers = [];
-      return;
+      familyMembers = loadPendingFamilyMembers();
+      return familyMembers;
     }
-    familyMembers = await response.json();
+    familyMembers = [...(await response.json()), ...loadPendingFamilyMembers()];
   } catch (_error) {
-    familyMembers = [];
+    familyMembers = loadPendingFamilyMembers();
   }
+
+  familyMembers = familyMembers.map((member) => ({
+    ...member,
+    syncState: member.syncState || (member.localId ? "pending" : "synced"),
+  }));
+  return familyMembers;
 }
 
 async function loadDoctors() {
@@ -2768,18 +3425,24 @@ async function loadDoctors() {
 }
 
 async function loadReports() {
+  let serverReports = [];
   try {
     const response = await fetch("/api/reports", { headers: getAuthHeaders() });
     if (!response.ok) {
-      reportHistory = [];
-      return;
+      reportHistory = mergeReports(loadCachedReports(), reportHistory);
+      persistReportCache(reportHistory);
+      renderDashboardPrimaryAction();
+      return reportHistory;
     }
-    reportHistory = await response.json();
+    serverReports = await response.json();
   } catch (_error) {
-    reportHistory = [];
+    serverReports = [];
   }
 
+  reportHistory = mergeReports(serverReports, loadCachedReports());
+  persistReportCache(reportHistory);
   renderDashboardPrimaryAction();
+  return reportHistory;
 }
 
 function renderDashboardRecommendation() {
@@ -2802,9 +3465,18 @@ function renderDashboardRecommendation() {
   document.querySelector(".welcome-section")?.appendChild(el);
 }
 
-function openReportsHub() {
-  qaContainer.style.display = "block";
-  document.querySelector(".qa-controls").style.display = "none";
+function renderReportsHub() {
+  const isDoctor = window.HealthSaathiAuth.getCurrentRole() === "doctor";
+  const doctorPicker = !isDoctor && doctorDirectory.length
+    ? `
+      <div class="dynamic-row" style="margin-bottom:0.9rem;">
+        <select id="reportShareDoctorEmail">
+          <option value="">Select doctor to share report</option>
+          ${doctorDirectory.map((doctor) => `<option value="${doctor.email}">${doctor.email}</option>`).join("")}
+        </select>
+      </div>
+    `
+    : "";
 
   const rows = reportHistory.length
     ? reportHistory
@@ -2815,7 +3487,10 @@ function openReportsHub() {
             <strong>${report.title || "Consultation report"}</strong>
             <p class="history-meta">${formatDate(report.createdAt)}</p>
           </div>
-          <button class="feature-btn" data-report-id="${report.id}">Delete</button>
+          <div style="display:flex;gap:0.45rem;flex-wrap:wrap;justify-content:flex-end;">
+            ${!isDoctor ? `<button class="feature-btn" data-share-report-id="${report.id || ""}" data-share-created="${report.createdAt || ""}">Share to Doctor</button>` : ""}
+            ${report.id ? `<button class="feature-btn" data-report-id="${report.id}">Delete</button>` : `<span class="muted" style="font-size:0.8rem;">Syncing...</span>`}
+          </div>
         </li>
       `
         )
@@ -2825,9 +3500,48 @@ function openReportsHub() {
   flashcardContainer.innerHTML = `
     <div class="flashcard">
       <h3>Reports Hub</h3>
+      ${doctorPicker}
       <ul class="history-list">${rows}</ul>
     </div>
   `;
+
+  const reportByIdentity = new Map(
+    reportHistory.map((item) => [`${item.id || ""}::${item.createdAt || ""}`, item])
+  );
+
+  document.querySelectorAll("[data-share-report-id]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const doctorEmail = document.getElementById("reportShareDoctorEmail")?.value?.trim();
+      if (!doctorEmail) {
+        showToast("Select a doctor before sharing.", "error");
+        return;
+      }
+
+      const key = `${btn.dataset.shareReportId || ""}::${btn.dataset.shareCreated || ""}`;
+      const report = reportByIdentity.get(key);
+      if (!report) {
+        showToast("Could not find report details to share.", "error");
+        return;
+      }
+
+      const urgency = report?.analysis?.urgency?.level || "Unknown";
+      const summarySnippet = String(report?.doctorSummary || report?.title || "Consultation report")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 360);
+
+      const chatText = `[Report Shared] ${report.title || "Consultation report"} | Urgency: ${urgency}. ${summarySnippet}`;
+      await postWithOfflineQueue("/api/chat", {
+        sender: "Patient",
+        text: chatText,
+        doctorEmail,
+        createdAt: new Date().toISOString(),
+      });
+
+      showToast("Report summary shared to doctor inbox.");
+    });
+  });
 
   document.querySelectorAll("[data-report-id]").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -2836,10 +3550,19 @@ function openReportsHub() {
         headers: getAuthHeaders(),
       });
       await loadReports();
-      openReportsHub();
+      renderReportsHub();
       renderDashboardRecommendation();
     });
   });
+}
+
+async function openReportsHub() {
+  qaContainer.style.display = "block";
+  document.querySelector(".qa-controls").style.display = "none";
+  await loadDoctors();
+  await loadReports();
+  renderDashboardPrimaryAction();
+  renderReportsHub();
 }
 
 async function openDocumentsHub() {
@@ -2862,22 +3585,27 @@ async function openDocumentsHub() {
       <form id="documentForm" class="login-form">
         <input id="docTitle" type="text" placeholder="Document title (optional if file selected)">
         <textarea id="docNotes" rows="3" placeholder="Notes / prescription details"></textarea>
-        <input id="docFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.doc,.docx">
-        <p class="muted">Upload prescriptions/reports and keep them safe. Max recommended size: 4MB.</p>
+        <input id="docFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.md,.csv,.doc,.docx">
+        <p class="muted">Upload prescriptions or reports and get a simplified summary plus precautions. Max recommended size: 4MB.</p>
         <button type="submit" class="feature-btn">Add Document</button>
       </form>
       <ul class="history-list">
         ${docs
           .map(
             (doc) => `
-          <li class="history-item">
-            <div>
+          <li class="history-item" style="align-items:flex-start;">
+            <div style="flex:1;min-width:0;">
               <strong>${doc.title}</strong>
               <p class="history-meta">${doc.notes || "No notes"}</p>
+              ${doc.summary ? `<p class="history-meta"><strong>Summary:</strong> ${String(doc.summary).slice(0, 260)}${String(doc.summary).length > 260 ? "..." : ""}</p>` : ""}
+              ${doc.precautions ? `<p class="history-meta"><strong>Precautions:</strong> ${String(doc.precautions).slice(0, 260)}${String(doc.precautions).length > 260 ? "..." : ""}</p>` : ""}
+              ${doc.extractedText ? `<p class="history-meta">OCR/text extraction saved for follow-up review.</p>` : ""}
               <p class="history-meta">${doc.fileName ? `File: ${doc.fileName}` : ""}</p>
             </div>
-            ${doc.fileData ? `<button class="feature-btn" data-doc-download="${doc.id}">Download</button>` : ""}
-            <button class="feature-btn" data-doc-id="${doc.id}">Delete</button>
+            <div style="display:grid;gap:0.5rem;justify-items:end;">
+              ${doc.fileData ? `<button class="feature-btn" data-doc-download="${doc.id}">Download</button>` : ""}
+              <button class="feature-btn" data-doc-id="${doc.id}">Delete</button>
+            </div>
           </li>
         `
           )
@@ -2900,21 +3628,32 @@ async function openDocumentsHub() {
     let fileData = "";
     let fileName = "";
     let fileMime = "";
+    let analysis = { summary: "", precautions: "", extractedText: "", keyFindings: [] };
 
     if (file) {
+      showToast("Scanning document with OCR and simplifying medical terms...");
+      fileName = file.name;
+      fileMime = file.type || "application/octet-stream";
       fileData = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result || ""));
         reader.onerror = () => reject(new Error("Failed to read file"));
         reader.readAsDataURL(file);
       }).catch(() => "");
-      fileName = file.name;
-      fileMime = file.type || "application/octet-stream";
+
+      if (fileData) {
+        analysis = await analyzeDocumentViaApi({ fileData, fileName, fileMime }).catch(async () => {
+          return analyzeDocumentFile(file).catch(() => ({ summary: "", precautions: "", extractedText: "", keyFindings: [] }));
+        });
+      }
     }
 
     const response = await postWithOfflineQueue("/api/documents", {
       title,
       notes,
+      summary: analysis.summary,
+      precautions: analysis.precautions,
+      extractedText: analysis.extractedText,
       fileName,
       fileMime,
       fileData,
@@ -2927,8 +3666,12 @@ async function openDocumentsHub() {
       return;
     }
 
-    showToast(response ? "Document saved." : "Document saved offline and queued for sync.");
-    openDocumentsHub();
+    if (analysis.summary || analysis.precautions) {
+      showToast(response ? "Document analyzed and saved." : "Document analyzed and saved offline and queued for sync.");
+    } else {
+      showToast(response ? "Document saved." : "Document saved offline and queued for sync.");
+    }
+    await openDocumentsHub();
   });
 
   const docsById = new Map(docs.map((doc) => [String(doc.id), doc]));
@@ -2958,7 +3701,7 @@ async function openDocumentsHub() {
           return;
         }
         showToast("Document deleted.");
-        openDocumentsHub();
+        await openDocumentsHub();
       } catch (_error) {
         showToast("Unable to delete document.", "error");
       }
@@ -3162,20 +3905,144 @@ async function openChatHub() {
   const role = window.HealthSaathiAuth.getCurrentRole();
   await loadDoctors();
 
-  const doctorSelector = role === "doctor"
-    ? '<input id="doctorTargetEmail" type="email" placeholder="Patient email for doctor view">'
-    : `
-      <select id="doctorTargetEmail" required>
-        <option value="">Select your doctor</option>
-        ${doctorDirectory.map((doctor) => `<option value="${doctor.email}">${doctor.email}</option>`).join("")}
-      </select>
+  if (role === "doctor") {
+    let selectedPatientEmail = "";
+
+    flashcardContainer.innerHTML = `
+      <div class="flashcard">
+        <h3>Doctor Inbox</h3>
+        <p class="muted">Incoming patient conversations are grouped here. Select a thread and reply.</p>
+        <div style="display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:1rem;align-items:start;">
+          <div>
+            <h4 style="margin:0 0 0.6rem;">Inbox</h4>
+            <div id="doctorInboxList" class="history-list" style="max-height:340px;overflow:auto;"></div>
+          </div>
+          <div>
+            <div class="history-meta" id="doctorThreadLabel">Select a patient from inbox</div>
+            <div id="chatMessages" class="chat-messages"></div>
+            <div class="dynamic-row" style="margin-top:0.8rem;">
+              <input id="chatInput" type="text" placeholder="Reply to patient">
+              <button id="chatSendBtn" class="feature-btn">Send Reply</button>
+            </div>
+          </div>
+        </div>
+      </div>
     `;
+
+    const loadInbox = async () => {
+      let inbox = [];
+      try {
+        const response = await fetch("/api/chat/inbox", { headers: getAuthHeaders() });
+        if (response.ok) {
+          inbox = await response.json();
+        }
+      } catch (_error) {
+        inbox = [];
+      }
+
+      const holder = document.getElementById("doctorInboxList");
+      if (!holder) {
+        return [];
+      }
+
+      if (!inbox.length) {
+        holder.innerHTML = '<p class="muted">No patient messages yet.</p>';
+        return [];
+      }
+
+      holder.innerHTML = inbox
+        .map(
+          (item) => `
+          <button type="button" class="history-item" data-patient-thread="${item.patientEmail}" style="width:100%;text-align:left;">
+            <div style="flex:1;min-width:0;">
+              <strong>${item.patientEmail}</strong>
+              <p class="history-meta">${item.lastSender || "Patient"}: ${String(item.lastMessage || "").slice(0, 70)}</p>
+              <p class="history-meta">${item.messageCount || 0} messages</p>
+            </div>
+          </button>
+        `
+        )
+        .join("");
+
+      holder.querySelectorAll("[data-patient-thread]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          selectedPatientEmail = String(btn.dataset.patientThread || "").trim();
+          document.getElementById("doctorThreadLabel").textContent = selectedPatientEmail
+            ? `Conversation with ${selectedPatientEmail}`
+            : "Select a patient from inbox";
+          await loadMessages(selectedPatientEmail);
+        });
+      });
+
+      if (!selectedPatientEmail && inbox[0]?.patientEmail) {
+        selectedPatientEmail = inbox[0].patientEmail;
+      }
+
+      return inbox;
+    };
+
+    const loadMessages = async (targetPatientEmail) => {
+      const query = targetPatientEmail ? `?patientEmail=${encodeURIComponent(targetPatientEmail)}` : "";
+      let messages = [];
+      try {
+        const response = await fetch(`/api/chat${query}`, { headers: getAuthHeaders() });
+        if (response.ok) {
+          messages = await response.json();
+        }
+      } catch (_error) {
+        messages = [];
+      }
+
+      const messagesHtml = messages
+        .map((msg) => `<div class="chat-message"><strong>${msg.sender}:</strong> ${msg.text}</div>`)
+        .join("");
+      document.getElementById("chatMessages").innerHTML = messagesHtml || '<p class="muted">No messages in this thread yet.</p>';
+      document.getElementById("doctorThreadLabel").textContent = targetPatientEmail
+        ? `Conversation with ${targetPatientEmail}`
+        : "Select a patient from inbox";
+    };
+
+    const inbox = await loadInbox();
+    if (selectedPatientEmail) {
+      await loadMessages(selectedPatientEmail);
+    } else if (inbox[0]?.patientEmail) {
+      selectedPatientEmail = inbox[0].patientEmail;
+      await loadMessages(selectedPatientEmail);
+    }
+
+    document.getElementById("chatSendBtn")?.addEventListener("click", async () => {
+      const text = document.getElementById("chatInput").value.trim();
+      if (!text) {
+        return;
+      }
+      if (!selectedPatientEmail) {
+        showToast("Select a patient thread from inbox first.", "error");
+        return;
+      }
+
+      await postWithOfflineQueue("/api/chat", {
+        sender: "Doctor",
+        text,
+        createdAt: new Date().toISOString(),
+        patientEmail: selectedPatientEmail,
+      });
+
+      document.getElementById("chatInput").value = "";
+      await loadMessages(selectedPatientEmail);
+      await loadInbox();
+    });
+
+    return;
+  }
 
   flashcardContainer.innerHTML = `
     <div class="flashcard">
       <h3>Doctor-Patient Chat</h3>
-      <p class="muted">${role === "doctor" ? "Pick a patient thread to reply to. " : "Pick the doctor you want to send this to. "}Messages are kept in separate threads per doctor.</p>
-      ${doctorSelector}
+      <p class="muted">Pick the doctor you want to send this to. Messages are kept in separate threads per doctor.</p>
+      <select id="doctorTargetEmail" required>
+        <option value="">Select your doctor</option>
+        ${doctorDirectory.map((doctor) => `<option value="${doctor.email}">${doctor.email}</option>`).join("")}
+      </select>
       <div id="chatMessages" class="chat-messages"></div>
       <div class="dynamic-row">
         <input id="chatInput" type="text" placeholder="Type your message">
@@ -3186,9 +4053,7 @@ async function openChatHub() {
 
   const loadMessages = async () => {
     const target = document.getElementById("doctorTargetEmail")?.value.trim();
-    const query = role === "doctor"
-      ? (target ? `?patientEmail=${encodeURIComponent(target)}` : "")
-      : (target ? `?doctorEmail=${encodeURIComponent(target)}` : "");
+    const query = target ? `?doctorEmail=${encodeURIComponent(target)}` : "";
     let messages = [];
     try {
       const response = await fetch(`/api/chat${query}`, { headers: getAuthHeaders() });
@@ -3214,13 +4079,11 @@ async function openChatHub() {
       return;
     }
     const target = document.getElementById("doctorTargetEmail")?.value.trim();
-    const sender = window.HealthSaathiAuth.getCurrentRole() === "doctor" ? "Doctor" : "Patient";
     await postWithOfflineQueue("/api/chat", {
-      sender,
+      sender: "Patient",
       text,
       createdAt: new Date().toISOString(),
-      patientEmail: role === "doctor" ? (target || undefined) : undefined,
-      doctorEmail: role !== "doctor" ? (target || undefined) : undefined,
+      doctorEmail: target || undefined,
     });
     document.getElementById("chatInput").value = "";
     await loadMessages();

@@ -43,7 +43,7 @@ It helps patients capture complete symptom context, generate a doctor-ready repo
 
 - Prescription and medical document keeper persisted in SQLite.
 - Doctor visit calendar timeline with dashboard view.
-- Voice input support where browser supports speech recognition.
+- Voice input powered by AssemblyAI transcription for reliable dictation.
 - Multi-language UI switching (English, Hindi, Spanish).
 - Offline mode with service-worker caching.
 
@@ -79,6 +79,7 @@ It helps patients capture complete symptom context, generate a doctor-ready repo
 3. Set up environment variables:
    - Copy `.env.example` to `.env`
    - Update `DATABASE_URL` with your PostgreSQL connection string
+   - Add `ASSEMBLYAI_API_KEY` for voice transcription
    - For Supabase: `DATABASE_URL=postgresql://postgres:[password]@[host]:5432/postgres`
 
 4. Start the backend server:
@@ -112,6 +113,8 @@ The static files can be deployed to:
 ```
 DATABASE_URL=postgresql://username:password@host:5432/database
 PORT=3000
+ASSEMBLYAI_API_KEY=your_assemblyai_api_key
+OCR_API_KEY=your_ocr_api_key
 ```
 
 ## Disclaimer

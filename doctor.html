@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>HealthSaathi - Doctor Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="doctor.css" />
+  </head>
+  <body>
+    <header class="doc-header">
+      <div class="doc-brand">
+        <h1>HealthSaathi</h1>
+        <p>Doctor Dashboard</p>
+      </div>
+      <div class="doc-actions">
+        <span id="doctorIdentity" class="doc-user">Doctor</span>
+        <button id="editProfileBtn" class="doc-btn">Edit Profile</button>
+        <button id="refreshInboxBtn" class="doc-btn">Refresh Inbox</button>
+        <button id="logoutBtn" class="doc-btn primary">Logout</button>
+      </div>
+    </header>
+
+    <main class="doc-main">
+      <section class="doc-card">
+        <h2>Clinical Inbox</h2>
+        <p class="muted">Patient chats are grouped by thread. Select a patient and reply directly from inbox.</p>
+        <div class="doc-stat-row">
+          <div class="doc-stat"><strong id="statThreads">0</strong><span>Patient Threads</span></div>
+          <div class="doc-stat"><strong id="statMessages">0</strong><span>Total Messages</span></div>
+          <div class="doc-stat"><strong id="statUpdated">-</strong><span>Last Activity</span></div>
+        </div>
+      </section>
+
+      <section class="doc-card">
+        <h2>Doctor Profile</h2>
+        <div id="doctorProfileView" class="doc-profile-view"></div>
+      </section>
+
+      <section class="doc-grid">
+        <aside class="doc-card">
+          <h3>Inbox</h3>
+          <div id="inboxList" class="inbox-list"></div>
+        </aside>
+
+        <section class="doc-card">
+          <div class="thread-header">
+            <h3 id="threadTitle">Select a patient thread</h3>
+            <span id="threadMeta" class="muted"></span>
+          </div>
+          <div id="threadMessages" class="chat-box"></div>
+          <div class="chat-compose">
+            <input id="replyInput" type="text" placeholder="Write your reply to patient" />
+            <button id="sendReplyBtn" class="doc-btn primary">Send Reply</button>
+          </div>
+
+          <div class="thread-docs-head">
+            <h4>Patient Documents</h4>
+            <button id="refreshDocsBtn" class="doc-btn">Refresh Documents</button>
+          </div>
+          <div id="threadDocuments" class="doc-list"></div>
+        </section>
+      </section>
+    </main>
+
+    <div id="doctorProfileModal" class="doc-modal" style="display:none;">
+      <div class="doc-modal-content">
+        <h3>Edit Doctor Profile</h3>
+        <form id="doctorProfileForm" class="doc-form">
+          <label>Full Name<input id="docProfileName" type="text" required /></label>
+          <label>Specialization<input id="docProfileSpecialization" type="text" placeholder="e.g. Internal Medicine" /></label>
+          <label>Clinic / Hospital<input id="docProfileClinic" type="text" placeholder="Optional" /></label>
+          <label>Phone<input id="docProfilePhone" type="tel" placeholder="Optional" /></label>
+          <label>Consultation Notes<textarea id="docProfileNotes" rows="3" placeholder="Shown in your dashboard"></textarea></label>
+          <div class="doc-modal-actions">
+            <button id="cancelProfileBtn" type="button" class="doc-btn">Cancel</button>
+            <button type="submit" class="doc-btn primary">Save Profile</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="doctor.js"></script>
+  </body>
+</html>

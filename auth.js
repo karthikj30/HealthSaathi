@@ -12,6 +12,10 @@ function ensureAuthenticated() {
   }
 }
 
+function getDashboardPathByRole(role = getCurrentRole()) {
+  return role === "doctor" ? "doctor.html" : "index.html";
+}
+
 function getAuthHeaders() {
   return {
     "Content-Type": "application/json",
@@ -120,6 +124,7 @@ function getDisplayIdentity() {
 window.HealthSaathiAuth = {
   isAuthenticated,
   ensureAuthenticated,
+  getDashboardPathByRole,
   login,
   register,
   logout,

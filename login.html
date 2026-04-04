@@ -149,7 +149,7 @@
 
       // ——— Auth redirect ———
       if (window.HealthSaathiAuth?.isAuthenticated()) {
-        window.location.href = 'index.html';
+        window.location.href = window.HealthSaathiAuth.getDashboardPathByRole();
       }
 
       const loginForm   = document.getElementById('loginForm');
@@ -202,7 +202,9 @@
 
         loginInfoText.textContent = 'Login successful — redirecting…';
         loginInfo.classList.add('show');
-        setTimeout(() => { window.location.href = 'index.html'; }, 900);
+        setTimeout(() => {
+          window.location.href = window.HealthSaathiAuth.getDashboardPathByRole(result.user?.role);
+        }, 900);
       });
     </script>
   </body>
