@@ -1517,20 +1517,35 @@ window.addEventListener("beforeunload", () => {
   }
 });
 
-profileBtn.addEventListener("click", () => {
+function handleOpenProfileModal() {
+  if (profileDropdown) {
+    profileDropdown.style.display = "none";
+  }
+  openProfileModal();
+}
+
+profileBtn?.addEventListener("click", () => {
   profileDropdown.style.display = profileDropdown.style.display === "block" ? "none" : "block";
 });
 
 document.addEventListener("click", (e) => {
-  if (!profileBtn.contains(e.target) && !profileDropdown.contains(e.target)) {
+  const target = e.target;
+  if (!target) {
+    return;
+  }
+
+  // Delegated fallback in case menu content is re-rendered.
+  if (target.closest && target.closest("#editProfileBtn")) {
+    handleOpenProfileModal();
+    return;
+  }
+
+  if (profileBtn && profileDropdown && !profileBtn.contains(target) && !profileDropdown.contains(target)) {
     profileDropdown.style.display = "none";
   }
 });
 
-editProfileBtn.addEventListener("click", () => {
-  profileDropdown.style.display = "none";
-  openProfileModal();
-});
+editProfileBtn?.addEventListener("click", handleOpenProfileModal);
 
 quickQABtn?.addEventListener("click", () => {
   startQuickQABtn?.click();
@@ -3361,11 +3376,11 @@ familyDetailForm?.addEventListener("submit", async (event) => {
   }
 });
 
-cancelProfileBtn.addEventListener("click", () => {
+cancelProfileBtn?.addEventListener("click", () => {
   profileModal.style.display = "none";
 });
 
-profileForm.addEventListener("submit", async (e) => {
+profileForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   const profile = {
