@@ -1,0 +1,9 @@
+node_modules/
+data/*.db
+data/*.db-*
+.env
+yolov3.weights
+# Large video files – keep local only
+*.mp4
+*.mov
+*.avi

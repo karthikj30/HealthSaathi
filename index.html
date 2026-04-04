@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang='en'>
+  <head>
+    <meta charset='UTF-8' />
+    <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+    <meta http-equiv='Cache-Control' content='no-cache, no-store, must-revalidate' />
+    <meta http-equiv='Pragma' content='no-cache' />
+    <meta http-equiv='Expires' content='0' />
+    <meta name='description' content='HealthSaathi Patient Dashboard — Prepare for your consultation, track symptoms and manage your health.' />
+    <title>HealthSaathi — Dashboard</title>
+    <link rel='preconnect' href='https://fonts.googleapis.com' />
+    <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin />
+    <link href='https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Manrope:wght@400;500;600;700;800&display=swap' rel='stylesheet' />
+    <link rel='stylesheet' href='styles.css' />
+    <style id='dm-lang-styles'>
+      /* Language Selector */
+      .lang-selector { position: relative; }
+      #langBtn {
+        width: auto; height: 40px; min-width: 40px;
+        border-radius: 999px;
+        padding: 0 0.75rem;
+        gap: 0.3rem;
+        font-size: 0.8rem; font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        display: flex; align-items: center;
+        border: 1px solid rgba(15,123,108,0.18);
+        background: rgba(15,123,108,0.06);
+        color: var(--dm-chip-c, #0f7b6c);
+        transition: background 0.2s ease;
+      }
+      #langBtn:hover { background: rgba(15,123,108,0.13); }
+      .lang-dropdown {
+        position: absolute;
+        top: calc(100% + 6px); right: 0;
+        background: var(--dm-drop-bg, #fff);
+        border: 1px solid var(--dm-border, rgba(228,215,200,0.7));
+        border-radius: 14px;
+        padding: 0.4rem;
+        min-width: 150px;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.14);
+        display: none;
+        z-index: 200;
+        animation: dropIn 0.18s ease both;
+        transition: background 0.3s ease;
+      }
+      .lang-dropdown button {
+        display: flex; align-items: center; gap: 0.55rem;
+        width: 100%; padding: 0.55rem 0.8rem;
+        background: none; border: none;
+        text-align: left; cursor: pointer;
+        font-family: inherit; font-size: 0.86rem; font-weight: 600;
+        color: var(--dm-ink3, #1a4a42);
+        border-radius: 9px;
+        transition: background 0.15s ease;
+      }
+      .lang-dropdown button:hover { background: rgba(20,184,158,0.1); }
+      .lang-dropdown button.active { color: #0f7b6c; font-weight: 800; }
+      body[data-theme='dark'] .lang-dropdown button.active { color: #5de8d5; }
+    </style>
+    <style>
+      /* ============================================================
+         DASHBOARD ENHANCEMENTS — Inline additions
+         ============================================================ */
+
+      /* === Dark / Light Mode Variables === */
+      :root {
+        --dm-bg:        linear-gradient(135deg, #f0fdf9 0%, #faf8f5 60%, #f5f0ff 100%);
+        --dm-surface:   rgba(255,255,255,0.88);
+        --dm-surface2:  rgba(255,255,255,0.98);
+        --dm-border:    rgba(228,215,200,0.7);
+        --dm-ink:       #0f2520;
+        --dm-ink2:      #4e6b65;
+        --dm-ink3:      #1a4a42;
+        --dm-muted:     #8aada8;
+        --dm-header:    rgba(255,255,255,0.88);
+        --dm-header-b:  rgba(15,123,108,0.1);
+        --dm-welcome:   linear-gradient(135deg,rgba(15,123,108,0.06) 0%,rgba(255,255,255,0.9) 60%,rgba(242,125,66,0.05) 100%);
+        --dm-stat-bg:   rgba(255,255,255,0.7);
+        --dm-stat-b:    rgba(15,123,108,0.1);
+        --dm-drop-bg:   rgba(255,255,255,0.96);
+        --dm-chip-bg:   rgba(15,123,108,0.08);
+        --dm-chip-c:    #0f7b6c;
+        --dm-chip-b:    rgba(15,123,108,0.15);
+        --dm-offline-bg:rgba(255,255,255,0.7);
+        --dm-voice-bg:  rgba(255,255,255,0.5);
+        --dm-voice-c:   #4e6b65;
+        --dm-modal-bg:  rgba(255,255,255,0.98);
+        --dm-tour-bg:   rgba(255,255,255,0.97);
+        --dm-tour-h:    #0f1c1a;
+        --dm-tour-p:    #4e6b65;
+        --dm-dot:       #dde8e5;
+        --dm-icon-c:    #0f7b6c;
+        --dm-fc-bg:     rgba(255,255,255,0.88);
+        --dm-fc-h3:     #0f2520;
+        --dm-fc-p:      #4e6b65;
+        --dm-tag-bg:    rgba(255,255,255,0.7);
+        --dm-secondary-btn-bg: rgba(15,123,108,0.08);
+        --dm-secondary-btn-c:  #0f7b6c;
+        --dm-secondary-btn-b:  rgba(15,123,108,0.2);
+        --dm-shadow:    rgba(15,123,108,0.07);
+      }
+
+      body[data-theme='dark'] {
+        --dm-bg:        linear-gradient(135deg, #04130f 0%, #071a14 60%, #0d1020 100%);
+        --dm-surface:   rgba(15,28,24,0.92);
+        --dm-surface2:  rgba(18,34,30,0.98);
+        --dm-border:    rgba(255,255,255,0.09);
+        --dm-ink:       #e8f4f1;
+        --dm-ink2:      #9dcfc8;
+        --dm-ink3:      #b8dad5;
+        --dm-muted:     #6a9a93;
+        --dm-header:    rgba(4,19,15,0.88);
+        --dm-header-b:  rgba(20,184,158,0.15);
+        --dm-welcome:   linear-gradient(135deg,rgba(20,184,158,0.1) 0%,rgba(15,28,24,0.92) 60%,rgba(242,125,66,0.07) 100%);
+        --dm-stat-bg:   rgba(255,255,255,0.05);
+        --dm-stat-b:    rgba(20,184,158,0.15);
+        --dm-drop-bg:   rgba(12,30,26,0.97);
+        --dm-chip-bg:   rgba(20,184,158,0.1);
+        --dm-chip-c:    #5de8d5;
+        --dm-chip-b:    rgba(20,184,158,0.2);
+        --dm-offline-bg:rgba(15,28,24,0.7);
+        --dm-voice-bg:  rgba(15,28,24,0.5);
+        --dm-voice-c:   #9dcfc8;
+        --dm-modal-bg:  rgba(12,28,24,0.98);
+        --dm-tour-bg:   rgba(10,26,22,0.97);
+        --dm-tour-h:    #e0f2ee;
+        --dm-tour-p:    #9dcfc8;
+        --dm-dot:       rgba(255,255,255,0.15);
+        --dm-icon-c:    #14b89e;
+        --dm-fc-bg:     rgba(15,28,24,0.88);
+        --dm-fc-h3:     #d8f0ec;
+        --dm-fc-p:      #8ab8b2;
+        --dm-tag-bg:    rgba(255,255,255,0.06);
+        --dm-secondary-btn-bg: rgba(20,184,158,0.08);
+        --dm-secondary-btn-c:  #5de8d5;
+        --dm-secondary-btn-b:  rgba(20,184,158,0.2);
+        --dm-shadow:    rgba(0,0,0,0.3);
+      }
+
+      /* === Layout === */
+      body {
+        background: var(--dm-bg);
+        min-height: 100vh;
+        transition: background 0.35s ease, color 0.35s ease;
+      }
+
+      /* === Sticky Header === */
+      .dashboard-header {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.85rem 2rem;
+        background: var(--dm-header);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        border-bottom: 1px solid var(--dm-header-b);
+        box-shadow: 0 2px 20px var(--dm-shadow);
+        transition: background 0.35s ease, border-color 0.35s ease;
+      }
+
+      /* Dark mode navbar needs explicit opaque override (backdrop-filter blurs light page) */
+      body[data-theme='dark'] .dashboard-header {
+        background: rgba(4, 19, 15, 0.97) !important;
+        border-bottom-color: rgba(20, 184, 158, 0.18) !important;
+        box-shadow: 0 2px 24px rgba(0, 0, 0, 0.4) !important;
+      }
+
+      .header-left { display: flex; flex-direction: column; gap: 0.1rem; }
+
+      .app-title {
+        font-family: 'DM Serif Display', serif;
+        font-size: 1.6rem;
+        background: linear-gradient(135deg, #0f7b6c 0%, #1ab89e 50%, #f27d42 100%);
+        background-size: 200% 200%;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: gradientShift 6s ease infinite;
+        margin: 0;
+      }
+
+      @keyframes gradientShift {
+        0%,100% { background-position: 0% 50%; }
+        50%      { background-position: 100% 50%; }
+      }
+
+      .app-subtitle {
+        font-size: 0.76rem;
+        color: var(--dm-ink2);
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        margin: 0;
+        transition: color 0.35s ease;
+      }
+
+      .profile-menu {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        position: relative;
+      }
+
+      .profile-icon {
+        width: 40px; height: 40px;
+        border-radius: 50%;
+        background: none;
+        border: none;
+        color: var(--dm-icon-c);
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        color: #0f7b6c;
+        transition: background 0.2s ease, transform 0.2s ease;
+      }
+
+      .profile-icon:hover {
+        background: rgba(15,123,108,0.1);
+        transform: scale(1.1);
+      }
+
+      .profile-icon.voice-active {
+        background: linear-gradient(135deg, #0f7b6c, #1ab89e);
+        color: #fff;
+        box-shadow: 0 0 0 4px rgba(15,123,108,0.2);
+        animation: voicePulse 1.5s ease-in-out infinite;
+      }
+
+      @keyframes voicePulse {
+        0%,100% { box-shadow: 0 0 0 4px rgba(15,123,108,0.2); }
+        50%      { box-shadow: 0 0 0 8px rgba(15,123,108,0.08); }
+      }
+
+      /* === Main Content === */
+      .dashboard-main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 1.5rem 1.5rem 4rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.6rem;
+      }
+
+      /* === Status Bars === */
+      .offline-status {
+        border-radius: 14px;
+        border: 1px solid rgba(228,215,200,0.6);
+        background: rgba(255,255,255,0.7);
+        padding: 0.6rem 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.84rem;
+        gap: 0.6rem;
+        backdrop-filter: blur(8px);
+      }
+
+      .offline-status.offline { background: #fff7ed; border-color: #fbbf87; }
+      .offline-status.pending { background: #eff6ff; border-color: #93c5fd; }
+
+      .voice-status {
+        border-radius: 12px;
+        border: 1px dashed rgba(15,123,108,0.25);
+        background: rgba(255,255,255,0.5);
+        padding: 0.42rem 1rem;
+        font-size: 0.82rem;
+        color: #4e6b65;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .voice-status.listening {
+        background: rgba(20,184,158,0.08);
+        border-color: #14b89e;
+        color: #0f7b6c;
+        font-weight: 700;
+      }
+
+      /* === Welcome Card === */
+      .welcome-section {
+        position: relative;
+        border-radius: 24px;
+        padding: 2.8rem 2.5rem;
+        background: linear-gradient(135deg, rgba(15,123,108,0.06) 0%, rgba(255,255,255,0.9) 60%, rgba(242,125,66,0.05) 100%);
+        border: 1px solid rgba(15,123,108,0.12);
+        box-shadow: 0 8px 40px rgba(15,123,108,0.08);
+        overflow: hidden;
+        animation: weclomeIn 0.7s cubic-bezier(0.22,1,0.36,1) both;
+      }
+
+      @keyframes weclomeIn {
+        from { opacity:0; transform: translateY(20px); }
+        to   { opacity:1; transform: translateY(0); }
+      }
+
+      .welcome-section::before {
+        content: '';
+        position: absolute;
+        top: -80px; right: -60px;
+        width: 260px; height: 260px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(15,123,108,0.1) 0%, transparent 70%);
+        pointer-events: none;
+      }
+
+      .welcome-section::after {
+        content: '';
+        position: absolute;
+        bottom: -60px; left: -40px;
+        width: 200px; height: 200px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(242,125,66,0.08) 0%, transparent 70%);
+        pointer-events: none;
+      }
+
+      .welcome-content { position: relative; z-index: 1; }
+
+      .welcome-greeting {
+        font-size: 0.8rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #14b89e;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+      }
+
+      .greeting-dot {
+        width: 7px; height: 7px;
+        border-radius: 50%;
+        background: #14b89e;
+        animation: dotBlink 2s ease-in-out infinite;
+      }
+
+      @keyframes dotBlink {
+        0%,100% { opacity:1; transform:scale(1); }
+        50%      { opacity:0.35; transform:scale(0.65); }
+      }
+
+      .welcome-section h2 {
+        font-family: 'DM Serif Display', serif;
+        font-size: clamp(1.7rem, 3.5vw, 2.4rem);
+        line-height: 1.1;
+        margin: 0 0 0.55rem;
+        background: linear-gradient(135deg, #0f2520, #0f7b6c);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .welcome-section h2 #userName {
+        background: linear-gradient(135deg, #0f7b6c, #1ab89e);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .welcome-section > .welcome-content > p {
+        color: #4e6b65;
+        font-size: 1rem;
+        margin-bottom: 1.8rem;
+        font-weight: 500;
+      }
+
+      .welcome-actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+
+      .cta-button {
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(135deg, #0f7b6c, #1ab89e);
+        color: #fff;
+        border: none;
+        border-radius: 14px;
+        padding: 0.88rem 2rem;
+        font-size: 0.95rem;
+        font-weight: 800;
+        font-family: inherit;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        box-shadow: 0 6px 28px rgba(15,123,108,0.35);
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+        letter-spacing: 0.01em;
+      }
+
+      .cta-button::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+        background-size: 200% 100%;
+        animation: shimBtn 3s linear infinite;
+      }
+
+      @keyframes shimBtn {
+        from { background-position: -200% 0; }
+        to   { background-position: 200% 0; }
+      }
+
+      .cta-button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 44px rgba(15,123,108,0.45);
+      }
+
+      .btn-secondary-action {
+        background: rgba(15,123,108,0.08);
+        border: 1.5px solid rgba(15,123,108,0.2);
+        border-radius: 14px;
+        padding: 0.88rem 1.5rem;
+        font-size: 0.88rem;
+        font-weight: 700;
+        font-family: inherit;
+        color: #0f7b6c;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+      }
+
+      .btn-secondary-action:hover {
+        background: rgba(15,123,108,0.14);
+        border-color: rgba(15,123,108,0.4);
+        transform: translateY(-2px);
+      }
+
+      /* Quick stats row in welcome */
+      .welcome-stats {
+        display: flex;
+        gap: 1.5rem;
+        margin-top: 1.6rem;
+        flex-wrap: wrap;
+      }
+
+      .welcome-stat {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(255,255,255,0.7);
+        border: 1px solid rgba(15,123,108,0.1);
+        border-radius: 12px;
+        padding: 0.55rem 0.9rem;
+        font-size: 0.83rem;
+        font-weight: 700;
+        color: #1a4a42;
+        backdrop-filter: blur(6px);
+      }
+
+      .welcome-stat svg { color: #14b89e; flex-shrink: 0; }
+
+      /* === QA Container === */
+      .qa-container {
+        border-radius: 20px;
+        background: rgba(255,255,255,0.88);
+        border: 1px solid rgba(15,123,108,0.1);
+        box-shadow: 0 8px 32px rgba(15,123,108,0.07);
+        padding: 2rem;
+        animation: fadeUp 0.5s ease both;
+      }
+
+      @keyframes fadeUp {
+        from { opacity:0; transform:translateY(16px); }
+        to   { opacity:1; transform:translateY(0); }
+      }
+
+      /* === Feature Cards Grid === */
+      .features-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 1.2rem;
+      }
+
+      .feature-card {
+        background: var(--dm-fc-bg);
+        border: 1px solid var(--dm-border);
+        transition: background 0.35s ease, border-color 0.35s ease, transform 0.3s ease, box-shadow 0.3s ease;
+        border-radius: 22px;
+        padding: 1.8rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s ease, border-color 0.3s ease;
+        animation: fadeUp 0.6s cubic-bezier(0.22,1,0.36,1) both;
+        cursor: default;
+        backdrop-filter: blur(8px);
+      }
+
+      .feature-card:nth-child(1) { animation-delay: 0.05s; }
+      .feature-card:nth-child(2) { animation-delay: 0.12s; }
+      .feature-card:nth-child(3) { animation-delay: 0.19s; }
+      .feature-card:nth-child(4) { animation-delay: 0.26s; }
+
+      .feature-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: var(--fc-accent, linear-gradient(90deg, #0f7b6c, #1ab89e));
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      .feature-card:hover::before { opacity: 1; }
+
+      .feature-card:hover {
+        transform: translateY(-7px);
+        box-shadow: 0 20px 56px rgba(15,123,108,0.13), 0 0 0 1px rgba(15,123,108,0.07);
+        border-color: rgba(15,123,108,0.15);
+      }
+
+      .feature-card-icon {
+        width: 52px; height: 52px;
+        border-radius: 16px;
+        display: grid;
+        place-items: center;
+        flex-shrink: 0;
+        margin-bottom: 0.4rem;
+      }
+
+      .feature-card h3 {
+        font-family: 'DM Serif Display', serif;
+        font-size: 1.2rem;
+        color: var(--dm-fc-h3);
+        margin: 0;
+        transition: color 0.35s ease;
+      }
+
+      .feature-card p {
+        font-size: 0.86rem;
+        color: var(--dm-fc-p);
+        line-height: 1.55;
+        margin: 0;
+        flex: 1;
+        transition: color 0.35s ease;
+      }
+
+      .feature-btn {
+        background: linear-gradient(135deg, #0f7b6c, #1ab89e);
+        color: #fff;
+        border: none;
+        border-radius: 12px;
+        padding: 0.65rem 1.2rem;
+        font-size: 0.85rem;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        width: 100%;
+        justify-content: center;
+        margin-top: 0.5rem;
+        box-shadow: 0 4px 14px rgba(15,123,108,0.2);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        text-decoration: none;
+      }
+
+      .feature-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(15,123,108,0.32);
+      }
+
+      /* === Profile Dropdown === */
+      .profile-dropdown {
+        position: absolute;
+        top: calc(100% + 0.5rem);
+        right: 0;
+        background: var(--dm-drop-bg);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--dm-border);
+        border-radius: 16px;
+        box-shadow: 0 16px 48px rgba(0,0,0,0.18);
+        padding: 0.5rem;
+        min-width: 190px;
+        display: none;
+        animation: dropIn 0.2s ease both;
+        transition: background 0.35s ease;
+      }
+
+      @keyframes dropIn {
+        from { opacity:0; transform:translateY(-8px) scale(0.97); }
+        to   { opacity:1; transform:translateY(0) scale(1); }
+      }
+
+      .profile-dropdown button {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        width: 100%;
+        padding: 0.6rem 0.85rem;
+        background: none;
+        border: none;
+        text-align: left;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: var(--dm-ink3);
+        border-radius: 10px;
+        transition: background 0.15s ease, color 0.3s ease;
+      }
+
+      .profile-dropdown button:hover {
+        background: rgba(20,184,158,0.1);
+      }
+
+      /* === User Chip === */
+      .user-chip {
+        background: var(--dm-chip-bg);
+        border: 1px solid var(--dm-chip-b);
+        border-radius: 999px;
+        padding: 0.3rem 0.75rem;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--dm-chip-c);
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        transition: background 0.3s ease, color 0.3s ease;
+      }
+
+      /* === Dark Mode Toggle Button === */
+      #darkModeBtn {
+        width: 40px; height: 40px;
+        border-radius: 50%;
+        border: none;
+        background: none;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        color: var(--dm-icon-c);
+        transition: background 0.2s ease, transform 0.3s ease;
+        flex-shrink: 0;
+      }
+      #darkModeBtn:hover {
+        background: rgba(20,184,158,0.1);
+        transform: rotate(20deg) scale(1.1);
+      }
+      #darkModeBtn .dm-sun  { display: none; }
+      #darkModeBtn .dm-moon { display: block; }
+      body[data-theme='dark'] #darkModeBtn .dm-sun  { display: block; }
+      body[data-theme='dark'] #darkModeBtn .dm-moon { display: none; }
+
+      /* === Modal === */
+      .modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(10,25,22,0.55);
+        backdrop-filter: blur(6px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        animation: fadeIn 0.2s ease both;
+      }
+
+      .modal-content {
+        background: var(--dm-modal-bg);
+        border: 1px solid var(--dm-border);
+        border-radius: 22px;
+        padding: 2rem;
+        box-shadow: 0 32px 80px rgba(0,0,0,0.2);
+        max-width: 760px;
+        width: min(760px, 94vw);
+        max-height: 90vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        animation: fadeUp 0.35s cubic-bezier(0.22,1,0.36,1) both;
+        transition: background 0.35s ease;
+        color: var(--dm-ink);
+      }
+
+      .modal-content h3 {
+        font-family: 'DM Serif Display', serif;
+        color: #0f7b6c;
+        font-size: 1.4rem;
+        margin-top: 0;
+      }
+
+      .modal-content label {
+        color: var(--dm-ink2);
+        font-size: 0.86rem;
+        font-weight: 700;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+      }
+
+      .modal-content input, .modal-content select {
+        background: var(--dm-stat-bg);
+        border: 1px solid var(--dm-border);
+        color: var(--dm-ink);
+        border-radius: 10px;
+        padding: 0.6rem 0.85rem;
+        font-family: inherit;
+        font-size: 0.9rem;
+        transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+      }
+
+      /* ============================================================
+         WALKTHROUGH OVERLAY
+         ============================================================ */
+      #tourOverlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9000;
+        pointer-events: none;
+      }
+
+      #tourSpotlight {
+        position: fixed;
+        border-radius: 16px;
+        box-shadow: 0 0 0 9999px rgba(5,25,20,0.78);
+        transition: all 0.45s cubic-bezier(0.22,1,0.36,1);
+        border: 2px solid rgba(20,184,158,0.7);
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      /* Tour card is fixed — always visible inside viewport */
+      #tourCard {
+        position: fixed;
+        background: var(--dm-tour-bg);
+        border: 1px solid rgba(20,184,158,0.2);
+        border-radius: 20px;
+        padding: 1.6rem 1.8rem;
+        width: min(360px, calc(100vw - 24px));
+        box-shadow: 0 24px 60px rgba(0,0,0,0.35), 0 0 0 1px rgba(20,184,158,0.18);
+        pointer-events: all;
+        z-index: 2;
+        transition: left 0.45s cubic-bezier(0.22,1,0.36,1), top 0.45s cubic-bezier(0.22,1,0.36,1);
+      }
+
+      @keyframes tourCardIn {
+        from { opacity:0; transform:scale(0.94) translateY(10px); }
+        to   { opacity:1; transform:scale(1) translateY(0); }
+      }
+
+      .tour-step-badge {
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #14b89e;
+        margin-bottom: 0.6rem;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+
+      .tour-step-badge::before {
+        content: '';
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: #14b89e;
+        display: inline-block;
+        animation: dotBlink 1.5s infinite;
+      }
+
+      #tourCard h3 {
+        font-family: 'DM Serif Display', serif;
+        font-size: 1.25rem;
+        color: var(--dm-tour-h);
+        margin: 0 0 0.55rem;
+        line-height: 1.2;
+        transition: color 0.3s ease;
+      }
+
+      #tourCard p {
+        font-size: 0.88rem;
+        color: var(--dm-tour-p);
+        line-height: 1.6;
+        margin: 0 0 1.3rem;
+        transition: color 0.3s ease;
+      }
+
+      .tour-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+      }
+
+      .tour-progress {
+        display: flex;
+        gap: 5px;
+        align-items: center;
+      }
+
+      .tour-dot {
+        width: 7px; height: 7px;
+        border-radius: 50%;
+        background: var(--dm-dot);
+        transition: all 0.3s ease;
+      }
+
+      .tour-dot.active {
+        background: #14b89e;
+        transform: scale(1.3);
+      }
+
+      .tour-dot.done { background: #0f7b6c; }
+
+      .tour-btn-skip {
+        background: none;
+        border: none;
+        color: #8aada8;
+        font-size: 0.82rem;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        padding: 0;
+        transition: color 0.2s ease;
+      }
+
+      .tour-btn-skip:hover { color: #4e6b65; }
+
+      .tour-btn-next {
+        background: linear-gradient(135deg, #0f7b6c, #1ab89e);
+        border: none;
+        border-radius: 10px;
+        padding: 0.6rem 1.4rem;
+        color: #fff;
+        font-size: 0.88rem;
+        font-weight: 800;
+        font-family: inherit;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        box-shadow: 0 4px 16px rgba(15,123,108,0.3);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .tour-btn-next:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(15,123,108,0.4);
+      }
+
+      /* Animated arrow pointing at target */
+      #tourArrow {
+        position: absolute;
+        opacity: 0;
+        transition: all 0.4s ease;
+        pointer-events: none;
+        color: #14b89e;
+        filter: drop-shadow(0 2px 6px rgba(20,184,158,0.5));
+        animation: arrowBob 1.2s ease-in-out infinite;
+      }
+
+      @keyframes arrowBob {
+        0%,100% { transform: translateY(0); }
+        50%      { transform: translateY(-6px); }
+      }
+
+      /* === Toast host === */
+      .toast-host {
+        position: fixed;
+        right: 1rem;
+        bottom: 1rem;
+        display: grid;
+        gap: 0.55rem;
+        z-index: 2200;
+        pointer-events: none;
+      }
+
+      .toast {
+        min-width: 220px;
+        max-width: min(420px, 88vw);
+        padding: 0.72rem 1rem;
+        border-radius: 14px;
+        border: 1px solid transparent;
+        box-shadow: 0 10px 28px rgba(15,123,108,0.14);
+        font-size: 0.88rem;
+        font-weight: 600;
+        background: #fff;
+        opacity: 0;
+        transform: translateY(8px);
+        animation: toast-in 0.22s ease forwards;
+      }
+
+      .toast-success { border-color: #9ad7cc; background: #edfbf7; color: #0b5e45; }
+      .toast-error   { border-color: #f0b1b1; background: #fff3f3; color: #8f2e2e; }
+      .toast-exit    { opacity: 0; transform: translateY(6px); transition: opacity 0.2s ease, transform 0.2s ease; }
+
+      @keyframes toast-in {
+        from { opacity:0; transform:translateY(8px); }
+        to   { opacity:1; transform:translateY(0); }
+      }
+
+      /* === Backdrop === */
+      .backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(5,25,20,0.45);
+        backdrop-filter: blur(4px);
+        z-index: 999;
+        display: none;
+      }
+
+      .backdrop.active { display: block; }
+
+      /* === QA controls === */
+      .qa-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .control-btn {
+        background: linear-gradient(135deg, #0f7b6c, #1ab89e);
+        color: #fff;
+        border: none;
+        padding: 0.68rem 1.5rem;
+        border-radius: 12px;
+        font-family: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.2s ease, opacity 0.2s ease;
+      }
+
+      .control-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      .control-btn:not(:disabled):hover { transform: translateY(-2px); }
+
+      /* === Role badge === */
+      .role-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.76rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        padding: 0.28rem 0.7rem;
+        border-radius: 999px;
+      }
+
+      .role-badge.patient {
+        background: rgba(15,123,108,0.1);
+        color: #0f7b6c;
+        border: 1px solid rgba(15,123,108,0.2);
+      }
+
+      .role-badge.doctor {
+        background: rgba(99,102,241,0.1);
+        color: #4338ca;
+        border: 1px solid rgba(99,102,241,0.2);
+      }
+
+      /* Responsive */
+      @media (max-width: 640px) {
+        .dashboard-header { padding: 0.7rem 1rem; }
+        .dashboard-main   { padding: 1rem 1rem 3rem; }
+        .welcome-section  { padding: 1.8rem 1.2rem; }
+        .welcome-stats    { gap: 0.7rem; }
+        .features-grid    { grid-template-columns: 1fr 1fr; }
+      }
+
+      @media (max-width: 420px) {
+        .features-grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class='backdrop' id='backdrop' aria-hidden='true'></div>
+
+    <!-- Walkthrough Overlay -->
+    <div id='tourOverlay' aria-hidden='true' style='display:none;'>
+      <div id='tourSpotlight'></div>
+      <svg id='tourArrow' width='32' height='32' viewBox='0 0 24 24' fill='currentColor'>
+        <path d='M12 2l4 8H8l4-8zm0 20V10'/>
+      </svg>
+      <div id='tourCard'>
+        <div class='tour-step-badge' id='tourStepLabel'>Step 1 of 6</div>
+        <h3 id='tourTitle'>Welcome to HealthSaathi</h3>
+        <p id='tourDesc'>Let's take a quick 30-second tour of your dashboard.</p>
+        <div class='tour-actions'>
+          <div class='tour-progress' id='tourDots'></div>
+          <div style='display:flex;gap:0.6rem;align-items:center;'>
+            <button class='tour-btn-skip' id='tourSkip'>Skip tour</button>
+            <button class='tour-btn-next' id='tourNext'>
+              Next
+              <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M5 12h14M12 5l7 7-7 7'/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast host -->
+    <div class='toast-host' id='toastHost'></div>
+
+    <!-- ========== HEADER ========== -->
+    <header class='dashboard-header'>
+      <div class='header-left'>
+        <h1 class='app-title'>HealthSaathi</h1>
+        <p class='app-subtitle' data-i18n='app_subtitle'>Your Health Companion</p>
+      </div>
+      <div class='header-right'>
+        <div class='profile-menu'>
+          <span class='user-chip' id='roleChip'>
+            <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><circle cx='12' cy='8' r='4'/><path d='M20 21a8 8 0 1 0-16 0'/></svg>
+            <span id='roleLabel'>Patient</span>
+          </span>
+
+          <!-- Voice -->
+          <button id='voiceControlBtn' class='profile-icon' aria-label='Toggle voice control' title='Enable voice input' data-tour='voice'>
+            <svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
+              <path d='M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z'></path>
+              <path d='M19 10a7 7 0 0 1-14 0'></path>
+              <line x1='12' y1='19' x2='12' y2='22'></line>
+              <line x1='8' y1='22' x2='16' y2='22'></line>
+            </svg>
+          </button>
+
+          <!-- Quick Q&A -->
+          <button id='quickQABtn' class='profile-icon quick-qa-btn' aria-label='Open Q&A session' style='display:none;'>
+            <svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M12 3v18'/><path d='M3 12h18'/></svg>
+          </button>
+
+          <!-- Language Selector -->
+          <div class='lang-selector'>
+            <button id='langBtn' aria-label='Change language'>
+              <svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><circle cx='12' cy='12' r='10'/><path d='M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'/></svg>
+              <span id='currentLangLabel'>English</span>
+            </button>
+            <div class='lang-dropdown' id='langDropdown'>
+              <button data-lang='en'>🇬🇧 English</button>
+              <button data-lang='hi'>🇮🇳 हिंदी</button>
+              <button data-lang='mr'>🇮🇳 मराठी</button>
+              <button data-lang='kn'>🇮🇳 ಕನ್ನಡ</button>
+              <button data-lang='ta'>🇮🇳 தமிழ்</button>
+              <button data-lang='ml'>🇮🇳 മലയാളം</button>
+            </div>
+          </div>
+
+          <!-- Dark Mode Toggle -->
+          <button id='darkModeBtn' aria-label='Toggle dark mode' title='Toggle dark mode'>
+            <svg class='dm-moon' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><path d='M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z'/></svg>
+            <svg class='dm-sun' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='12' cy='12' r='5'/><line x1='12' y1='1' x2='12' y2='3'/><line x1='12' y1='21' x2='12' y2='23'/><line x1='4.22' y1='4.22' x2='5.64' y2='5.64'/><line x1='18.36' y1='18.36' x2='19.78' y2='19.78'/><line x1='1' y1='12' x2='3' y2='12'/><line x1='21' y1='12' x2='23' y2='12'/><line x1='4.22' y1='19.78' x2='5.64' y2='18.36'/><line x1='18.36' y1='5.64' x2='19.78' y2='4.22'/></svg>
+          </button>
+
+          <!-- Profile -->
+          <button id='profileBtn' class='profile-icon' aria-label='Profile menu' data-tour='profile'>
+            <svg width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
+              <circle cx='12' cy='12' r='10'></circle>
+              <circle cx='12' cy='10' r='3'></circle>
+              <path d='M12 13v4'></path>
+            </svg>
+          </button>
+
+          <!-- Dropdown -->
+          <div id='profileDropdown' class='profile-dropdown'>
+            <button id='editProfileBtn'>
+              <svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7'/><path d='M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z'/></svg>
+              <span data-i18n='edit_profile'>Edit Profile</span>
+            </button>
+            <button id='tourRestartBtn'>
+              <svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><polyline points='23 4 23 10 17 10'/><path d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'/></svg>
+              <span data-i18n='take_tour_again'>Take Tour Again</span>
+            </button>
+            <button id='logoutBtn' style='color:#bb2d3b;'>
+              <svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'/><polyline points='16 17 21 12 16 7'/><line x1='21' y1='12' x2='9' y2='12'/></svg>
+              <span data-i18n='logout'>Logout</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ========== MAIN ========== -->
+    <main class='dashboard-main'>
+
+      <!-- Status bars -->
+      <div id='offlineStatusBar' class='offline-status' role='status' aria-live='polite'>
+        <span id='offlineStatusText' data-i18n='offline_msg'>Checking connection...</span>
+        <button id='syncNowBtn' class='feature-btn' type='button' style='width:auto;margin:0;padding:0.4rem 0.9rem;font-size:0.8rem;' data-i18n='sync_now'>Sync Now</button>
+      </div>
+      <div id='voiceStatusBar' class='voice-status' role='status' aria-live='polite'>
+        <svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z'/></svg>
+        <span id='voiceStatusText' data-i18n='voice_off'>Voice control: off</span>
+      </div>
+
+      <!-- Welcome card -->
+      <div class='welcome-section' id='welcomeSection' data-tour='welcome'>
+        <div class='welcome-content'>
+          <div class='welcome-greeting'>
+            <span class='greeting-dot'></span>
+            <span id='timeGreeting'>Good morning</span>
+          </div>
+          <h2>Welcome back, <span id='userName'>User</span>!</h2>
+          <p data-i18n='ready_consult'>Ready to prepare for your next consultation?</p>
+          <div class='welcome-actions'>
+            <button id='startQABtn' class='cta-button' data-tour='startqa'>
+              <svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M12 3v18'/><path d='M3 12h18'/></svg>
+              <span data-i18n='start_qa'>Start Q&A Session</span>
+            </button>
+            <button class='btn-secondary-action' id='tourRestartBtnWelcome'>
+              <svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><polyline points='23 4 23 10 17 10'/><path d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'/></svg>
+              <span data-i18n='take_tour'>Take a Tour</span>
+            </button>
+          </div>
+          <div class='welcome-stats' id='welcomeStats'>
+            <div class='welcome-stat'>
+              <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/></svg>
+              <span id='statReports' data-i18n='stat_reports'>0 Reports</span>
+            </div>
+            <div class='welcome-stat'>
+              <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><rect x='3' y='4' width='18' height='18' rx='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>
+              <span id='statVisits' data-i18n='stat_visits'>0 Visits</span>
+            </div>
+            <div class='welcome-stat'>
+              <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/></svg>
+              <span id='statMessages' data-i18n='stat_chat'>Chat ready</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q&A Container -->
+      <div id='qaContainer' class='qa-container' style='display: none;'>
+        <div id='flashcardContainer' class='flashcard-container'><!-- Flashcards inserted here --></div>
+        <div class='qa-controls'>
+          <button id='prevBtn' class='control-btn' disabled>← Previous</button>
+          <span id='progressText' style='font-weight:700;color:#0f7b6c;'>Question 1 of 10</span>
+          <button id='nextBtn' class='control-btn'>Next →</button>
+        </div>
+      </div>
+
+      <!-- Feature cards -->
+      <div class='features-grid' id='featuresGrid' data-tour='features'>
+
+        <!-- Reports -->
+        <div class='feature-card' style='--fc-accent: linear-gradient(90deg, #0f7b6c, #1ab89e);'>
+          <div class='feature-card-icon' style='background:rgba(15,123,108,0.1);'>
+            <svg width='26' height='26' viewBox='0 0 24 24' fill='none' stroke='#0f7b6c' stroke-width='1.8'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/><line x1='16' y1='13' x2='8' y2='13'/><line x1='16' y1='17' x2='8' y2='17'/><polyline points='10 9 9 9 8 9'/></svg>
+          </div>
+          <h3 data-i18n='card_reports_title'>Reports</h3>
+          <p data-i18n='card_reports_desc'>View and download your consultation summaries. Share directly with your doctor or family members.</p>
+          <button id='viewReportsBtn' class='feature-btn'>
+            <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M5 12h14M12 5l7 7-7 7'/></svg>
+            <span data-i18n='view_reports'>View Reports</span>
+          </button>
+        </div>
+
+        <!-- Calendar -->
+        <div class='feature-card' style='--fc-accent: linear-gradient(90deg, #6366f1, #818cf8);'>
+          <div class='feature-card-icon' style='background:rgba(99,102,241,0.1);'>
+            <svg width='26' height='26' viewBox='0 0 24 24' fill='none' stroke='#6366f1' stroke-width='1.8'><rect x='3' y='4' width='18' height='18' rx='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>
+          </div>
+          <h3 data-i18n='card_calendar_title'>Calendar</h3>
+          <p data-i18n='card_calendar_desc'>Track doctor visits, symptom events, and health patterns across a visual timeline calendar.</p>
+          <button id='viewCalendarBtn' class='feature-btn' style='background:linear-gradient(135deg,#6366f1,#818cf8);box-shadow:0 4px 14px rgba(99,102,241,0.25);'>
+            <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M5 12h14M12 5l7 7-7 7'/></svg>
+            <span data-i18n='view_calendar'>View Calendar</span>
+          </button>
+        </div>
+
+        <!-- Documents -->
+        <div class='feature-card' style='--fc-accent: linear-gradient(90deg, #f28a43, #f5b335);'>
+          <div class='feature-card-icon' style='background:rgba(242,138,67,0.1);'>
+            <svg width='26' height='26' viewBox='0 0 24 24' fill='none' stroke='#f28a43' stroke-width='1.8'><path d='M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z'/></svg>
+          </div>
+          <h3 data-i18n='card_docs_title'>Documents</h3>
+          <p data-i18n='card_docs_desc'>Store prescriptions, lab reports, and medical documents securely. Upload and access anytime.</p>
+          <button id='viewDocumentsBtn' class='feature-btn' style='background:linear-gradient(135deg,#f28a43,#f5b335);box-shadow:0 4px 14px rgba(242,138,67,0.25);'>
+            <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M5 12h14M12 5l7 7-7 7'/></svg>
+            <span data-i18n='view_docs'>View Documents</span>
+          </button>
+        </div>
+
+        <!-- Chat -->
+        <div class='feature-card' style='--fc-accent: linear-gradient(90deg, #14b89e, #22d3ee);'>
+          <div class='feature-card-icon' style='background:rgba(20,184,158,0.1);'>
+            <svg width='26' height='26' viewBox='0 0 24 24' fill='none' stroke='#14b89e' stroke-width='1.8'><path d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/></svg>
+          </div>
+          <h3 data-i18n='card_chat_title'>Chat</h3>
+          <p data-i18n='card_chat_desc'>Communicate directly with your doctor. Send messages, share reports, and get follow-up guidance.</p>
+          <button id='startChatBtn' class='feature-btn' style='background:linear-gradient(135deg,#14b89e,#22d3ee);box-shadow:0 4px 14px rgba(20,184,158,0.25);'>
+            <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M5 12h14M12 5l7 7-7 7'/></svg>
+            <span data-i18n='start_chat'>Start Chat</span>
+          </button>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- Profile Modal -->
+    <div id='profileModal' class='modal' style='display: none;'>
+      <div class='modal-content'>
+        <h3>Edit Profile</h3>
+        <form id='profileForm' style='display:grid;gap:0.85rem;overflow-y:auto;max-height:calc(90vh - 6.5rem);padding-right:0.25rem;'>
+          <label>Full Name<input type='text' id='profileName' required /></label>
+          <label>Email<input type='email' id='profileEmail' readonly /></label>
+          <label>Date of Birth<input type='date' id='profileDob' /></label>
+          <label>Phone
+            <div class='phone-input'>
+              <select id='profileCountryCode' class='country-code'>
+                <option value='+91'>+91 (IN)</option>
+                <option value='+1'>+1 (US/CA)</option>
+                <option value='+44'>+44 (UK)</option>
+                <option value='+61'>+61 (AU)</option>
+                <option value='+971'>+971 (AE)</option>
+              </select>
+              <input type='tel' id='profilePhone' placeholder='Phone number' />
+            </div>
+          </label>
+          <label>Family Members
+            <div class='family-summary-shell'>
+              <div id='familySummaryList' class='family-summary-list'></div>
+              <button type='button' id='openFamilyModalBtn' class='feature-btn family-add-btn' style='width:auto;margin:0;padding:0.5rem 1rem;font-size:0.82rem;justify-content:flex-start;'>+ Add Family Member</button>
+            </div>
+          </label>
+          <div class='modal-actions'>
+            <button type='button' id='cancelProfileBtn' style='background:rgba(15,123,108,0.08);border:1px solid rgba(15,123,108,0.15);color:#0f7b6c;'>Cancel</button>
+            <button type='submit' class='feature-btn' style='width:auto;margin:0;'>Save Profile</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Family Member Modal -->
+    <div id='familyModal' class='modal' style='display:none;'>
+      <div class='modal-content family-modal-content' style='max-width:480px;'>
+        <h3 id='familyModalTitle'>Add Family Member</h3>
+        <form id='familyDetailForm' style='display:grid;gap:0.75rem;'>
+          <input type='hidden' id='familyMemberId' />
+          <label>Name<input type='text' id='familyDetailName' required /></label>
+          <label>Relation<input type='text' id='familyDetailRelation' placeholder='e.g. Mother' /></label>
+          <label>Email<input type='email' id='familyDetailEmail' placeholder='Optional' /></label>
+          <label>Phone<input type='tel' id='familyDetailPhone' placeholder='Optional' /></label>
+          <div class='modal-actions'>
+            <button type='button' id='cancelFamilyModalBtn' style='background:rgba(15,123,108,0.08);border:1px solid rgba(15,123,108,0.15);color:#0f7b6c;'>Cancel</button>
+            <button type='submit' class='feature-btn' style='width:auto;margin:0;'>Save Member</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src='i18n.js'></script>
+    <script src='auth.js'></script>
+    <script src='script.js'></script>
+    <script>
+      // ═══════════════════════════════════════════
+      //  DASHBOARD EXTRAS — Greeting, Role badge, Tour
+      // ═══════════════════════════════════════════
+
+      // Time-based greeting (i18n-aware)
+      (function () {
+        const h = new Date().getHours();
+        const key = h < 12 ? 'greeting_morning' : h < 17 ? 'greeting_afternoon' : 'greeting_evening';
+        const el = document.getElementById('timeGreeting');
+        // Will be overwritten by applyTranslations; set data-i18n for live updates
+        if (el) { el.setAttribute('data-i18n', key); }
+      })();
+
+      // Role badge
+      (function () {
+        const role = window.HealthSaathiAuth?.getCurrentRole?.() || 'patient';
+        const chip = document.getElementById('roleChip');
+        const label = document.getElementById('roleLabel');
+        if (label) label.textContent = role === 'doctor' ? '🩺 Doctor' : '🧑‍⚕️ Patient';
+        if (chip) {
+          chip.style.background = role === 'doctor' ? 'rgba(99,102,241,0.1)' : 'rgba(15,123,108,0.1)';
+          chip.style.color = role === 'doctor' ? '#4338ca' : '#0f7b6c';
+          chip.style.borderColor = role === 'doctor' ? 'rgba(99,102,241,0.2)' : 'rgba(15,123,108,0.2)';
+        }
+      })();
+
+      // Service worker
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').catch(err => console.error('SW error:', err));
+        });
+      }
+
+      // Tour restart buttons
+      document.getElementById('tourRestartBtn')?.addEventListener('click', () => {
+        document.getElementById('profileDropdown').style.display = 'none';
+        startTour();
+      });
+      document.getElementById('tourRestartBtnWelcome')?.addEventListener('click', startTour);
+
+      // ═══════════════════════════════════════════
+      //  INTERACTIVE WALKTHROUGH TOUR
+      // ═══════════════════════════════════════════
+
+      const TOUR_STEPS = [
+        { target: '#welcomeSection', titleKey: 'tour_step1_title', descKey: 'tour_step1_desc', placement: 'bottom' },
+        { target: '#startQABtn',     titleKey: 'tour_step2_title', descKey: 'tour_step2_desc', placement: 'bottom' },
+        { target: '#featuresGrid',   titleKey: 'tour_step3_title', descKey: 'tour_step3_desc', placement: 'top'    },
+        { target: '#viewReportsBtn', titleKey: 'tour_step4_title', descKey: 'tour_step4_desc', placement: 'top'    },
+        { target: '#voiceControlBtn',titleKey: 'tour_step5_title', descKey: 'tour_step5_desc', placement: 'bottom' },
+        { target: '#profileBtn',     titleKey: 'tour_step6_title', descKey: 'tour_step6_desc', placement: 'bottom' },
+      ];
+
+      let tourStep = 0;
+      let tourActive = false;
+
+      function startTour() {
+        tourStep = 0;
+        tourActive = true;
+        document.getElementById('tourOverlay').style.display = 'block';
+        // Do NOT lock body scroll — tour card is fixed-positioned now
+        renderTourStep();
+        localStorage.setItem('hs_tour_done', '1');
+      }
+
+      function endTour() {
+        tourActive = false;
+        document.getElementById('tourOverlay').style.display = 'none';
+        document.querySelectorAll('[data-tour-active]').forEach(el => el.removeAttribute('data-tour-active'));
+      }
+
+      function renderTourStep() {
+        const step = TOUR_STEPS[tourStep];
+        if (!step) { endTour(); return; }
+
+        const target = document.querySelector(step.target);
+        const overlay = document.getElementById('tourOverlay');
+        const spotlight = document.getElementById('tourSpotlight');
+        const card = document.getElementById('tourCard');
+        const title = document.getElementById('tourTitle');
+        const desc = document.getElementById('tourDesc');
+        const label = document.getElementById('tourStepLabel');
+        const dotsEl = document.getElementById('tourDots');
+        const nextBtn = document.getElementById('tourNext');
+
+        // Update text via i18n keys
+        const t = (typeof HS_i18n !== 'undefined') ? HS_i18n.t.bind(HS_i18n) : (k => k);
+        title.textContent = t(step.titleKey);
+        desc.textContent  = t(step.descKey);
+        label.textContent = `${t('tour_step') || 'Step'} ${tourStep + 1} of ${TOUR_STEPS.length}`;
+        const isLast = tourStep === TOUR_STEPS.length - 1;
+        nextBtn.innerHTML = isLast
+          ? `${t('tour_finish')} <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>`
+          : `${t('tour_next')} <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
+        const skipBtn = document.getElementById('tourSkip');
+        if (skipBtn) skipBtn.textContent = t('tour_skip');
+        // Dots
+        dotsEl.innerHTML = '';
+        TOUR_STEPS.forEach((_, i) => {
+          const dot = document.createElement('div');
+          dot.className = 'tour-dot' + (i < tourStep ? ' done' : i === tourStep ? ' active' : '');
+          dotsEl.appendChild(dot);
+        });
+
+        if (!target) { nextTourStep(); return; }
+
+        // Scroll instantly so getBoundingClientRect reads correct final position
+        target.scrollIntoView({ behavior: 'instant', block: 'center' });
+
+        // Wait one frame for layout to settle, then position overlay elements
+        requestAnimationFrame(() => {
+          const rect = target.getBoundingClientRect();
+          const pad = 10;
+          const cardW = Math.min(360, window.innerWidth - 24);
+          const cardH = 240; // approximate card height
+          const vw = window.innerWidth;
+          const vh = window.innerHeight;
+
+          // Spotlight (also fixed now)
+          spotlight.style.cssText = `
+            left:${rect.left - pad}px;
+            top:${rect.top - pad}px;
+            width:${rect.width + pad * 2}px;
+            height:${rect.height + pad * 2}px;
+          `;
+
+          // Card position — prefer below target, fall back above, always clamp to viewport
+          let cardTop = (step.placement === 'bottom')
+            ? rect.bottom + pad + 16
+            : rect.top - pad - 16 - cardH;
+
+          // Clamp so card is always fully within viewport
+          if (cardTop + cardH > vh - 16) cardTop = rect.top - pad - 16 - cardH;
+          if (cardTop < 80) cardTop = rect.bottom + pad + 16;
+          cardTop = Math.max(80, Math.min(cardTop, vh - cardH - 16));
+
+          let cardLeft = rect.left + rect.width / 2 - cardW / 2;
+          cardLeft = Math.max(12, Math.min(cardLeft, vw - cardW - 12));
+
+          card.style.left = `${cardLeft}px`;
+          card.style.top  = `${cardTop}px`;
+          card.style.width = `${cardW}px`;
+        }); // end requestAnimationFrame
+      }
+
+      function nextTourStep() {
+        tourStep++;
+        if (tourStep >= TOUR_STEPS.length) { endTour(); return; }
+        renderTourStep();
+      }
+
+      document.getElementById('tourNext')?.addEventListener('click', nextTourStep);
+      document.getElementById('tourSkip')?.addEventListener('click', endTour);
+
+      // ─── Language Selector ───────────────────────────────────────────
+      (function initLang() {
+        // Apply saved/default language on load
+        HS_i18n.applyTranslations();
+
+        // Mark active lang
+        function updateActiveMark() {
+          document.querySelectorAll('#langDropdown [data-lang]').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-lang') === HS_i18n.getLang());
+          });
+        }
+        updateActiveMark();
+
+        // Toggle dropdown
+        const langBtn = document.getElementById('langBtn');
+        const langDropdown = document.getElementById('langDropdown');
+        langBtn?.addEventListener('click', e => {
+          e.stopPropagation();
+          const open = langDropdown.style.display === 'block';
+          langDropdown.style.display = open ? 'none' : 'block';
+        });
+
+        // Language buttons
+        langDropdown?.querySelectorAll('[data-lang]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            HS_i18n.setLang(btn.getAttribute('data-lang'));
+            updateActiveMark();
+            langDropdown.style.display = 'none';
+            // Re-apply greeting (it uses data-i18n set dynamically)
+            const h = new Date().getHours();
+            const key = h < 12 ? 'greeting_morning' : h < 17 ? 'greeting_afternoon' : 'greeting_evening';
+            const el = document.getElementById('timeGreeting');
+            if (el) el.textContent = HS_i18n.t(key);
+          });
+        });
+
+        // Close on outside click
+        document.addEventListener('click', () => {
+          if (langDropdown) langDropdown.style.display = 'none';
+        });
+      })();
+
+      // Dark mode persistence — apply on load before render
+      (function initDarkMode() {
+        if (localStorage.getItem('hs_theme') === 'dark') {
+          document.body.setAttribute('data-theme', 'dark');
+        }
+      })();
+
+      // Dark mode toggle
+      document.getElementById('darkModeBtn')?.addEventListener('click', () => {
+        const isDark = document.body.getAttribute('data-theme') === 'dark';
+        if (isDark) {
+          document.body.removeAttribute('data-theme');
+          localStorage.setItem('hs_theme', 'light');
+        } else {
+          document.body.setAttribute('data-theme', 'dark');
+          localStorage.setItem('hs_theme', 'dark');
+        }
+      });
+
+      // Start tour on first visit
+      window.addEventListener('DOMContentLoaded', () => {
+        if (!localStorage.getItem('hs_tour_done')) {
+          setTimeout(startTour, 1200);
+        }
+      });
+
+    </script>
+  </body>
+</html>
